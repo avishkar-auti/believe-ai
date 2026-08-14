@@ -1,0 +1,38 @@
+import type {
+  ApiSuccessResponse,
+  Contact,
+  CreateContactInput,
+  CsvImportSummary,
+  PaginatedResult,
+} from "@believe-ai/shared";
+import { apiClient } from "../../lib/apiClient.js";
+
+export async function fetchContacts(params: { search?: string; page?: number }) {
+  const res = await apiClient.get<ApiSuccessResponse<PaginatedResult<Contact>>>("/contacts", { params });
+  return res.data.data;
+}
+
+export async function createContact(input: CreateContactInput) {
+  const res = await apiClient.post<ApiSuccessResponse<Contact>>("/contacts", input);
+  return res.data.data;
+}
+
+export async function deleteContact(id: string) {
+  await apiClient.delete(`/contacts/${id}`);
+}
+
+export async function parseContactsCsv(file: File) {
+  const formData = new FormData();
+  formData.append("file", file);
+  const res = await apiClient.post<ApiSuccessResponse<{ columns: string[]; rows: Record<string, string>[] }>>(
+    "/contacts/import/parse",
+    formData,
+    { headers: { "Content-Type": "multipart/form-data" } },
+  );
+  return res.data.data;
+}
+
+export async function importContactsCsv(rows: Record<string, string>[], mapping: Record<string, string>) {
+  const res = await apiClient.post<ApiSuccessResponse<CsvImportSummary>>("/contacts/import", { rows, mapping });
+  return res.data.data;
+}

@@ -1,0 +1,36 @@
+@import "@fontsource-variable/plus-jakarta-sans";
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    @apply antialiased;
+  }
+
+  body {
+    @apply bg-ink-50 text-ink-900 dark:bg-ink-900 dark:text-ink-50;
+    font-feature-settings: "ss01" 1;
+  }
+
+  /* Headlines carry the design's tight, confident tracking. */
+  h1,
+  h2,
+  h3 {
+    @apply tracking-tight;
+  }
+}
+
+@layer components {
+  /* The periwinkle canvas that white page-cards sit on, as seen in the hero
+     and section bands. Kept as a component class so sections stay readable. */
+  .canvas-band {
+    @apply bg-canvas dark:bg-ink-800;
+  }
+
+  /* Small rounded-square icon chip that sits above a feature card's title. */
+  .icon-chip {
+    @apply inline-flex h-9 w-9 items-center justify-center rounded-xl bg-ink-100 text-ink-700 dark:bg-ink-700 dark:text-ink-100;
+  }
+}
