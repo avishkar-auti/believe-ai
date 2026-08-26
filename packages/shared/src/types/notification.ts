@@ -5,6 +5,7 @@ export const NOTIFICATION_TYPES = [
   "campaign.completed",
   "contacts.imported",
   "integration.disconnected",
+  "room.summary.ready",
 ] as const;
 
 export type NotificationType = (typeof NOTIFICATION_TYPES)[number];

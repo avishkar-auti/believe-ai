@@ -2,6 +2,7 @@ export const QUEUE_NAMES = {
   EMAIL_SEND: "email.send",
   MEETING_EMAIL: "meeting.email",
   OUTREACH_FOLLOW_UP: "outreach.followup",
+  ROOM_SUMMARY: "room.summary",
 } as const;
 
 export interface EmailSendJobData {
@@ -29,4 +30,8 @@ export interface OutreachFollowUpJobData {
   contactId: string;
   userId: string;
   sequenceNumber: number;
+}
+
+export interface RoomSummaryJobData {
+  roomId: string;
 }

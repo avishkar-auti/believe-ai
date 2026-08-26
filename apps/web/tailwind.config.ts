@@ -1,7 +1,7 @@
 import type { Config } from "tailwindcss";
 
 /**
- * Design language: soft periwinkle canvas, white rounded surfaces, near-black
+ * Design language: neutral grey canvas, white rounded surfaces, near-black
  * ink, one vivid accent. Headlines are large with tight tracking; body copy is
  * small and muted. Buttons and chips are fully rounded pills.
  */
@@ -11,11 +11,11 @@ export default {
   theme: {
     extend: {
       colors: {
-        // The canvas the white page-cards sit on.
+        // The canvas the white page-cards sit on — neutral grey, no blue tint.
         canvas: {
-          DEFAULT: "#C7CBE4",
-          soft: "#DFE2F0",
-          deep: "#A9AFD0",
+          DEFAULT: "#F1F1F3",
+          soft: "#F6F6F8",
+          deep: "#E4E4E8",
         },
         // Near-black through to off-white. `ink-900` is the headline colour.
         ink: {
@@ -27,8 +27,8 @@ export default {
           500: "#6B7280",
           600: "#4B5160",
           700: "#333846",
-          800: "#1C1F29",
-          900: "#0E0F14",
+          800: "#141414",
+          900: "#000000",
         },
         brand: {
           50: "#EEF0FF",
@@ -66,6 +66,20 @@ export default {
       },
       maxWidth: {
         content: "72rem",
+      },
+      keyframes: {
+        marquee: {
+          "0%": { transform: "translateX(0)" },
+          "100%": { transform: "translateX(-50%)" },
+        },
+        shimmer: {
+          "0%": { backgroundPosition: "200% 0" },
+          "100%": { backgroundPosition: "-200% 0" },
+        },
+      },
+      animation: {
+        marquee: "marquee 28s linear infinite",
+        shimmer: "shimmer 1.8s ease-in-out infinite",
       },
     },
   },

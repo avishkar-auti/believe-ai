@@ -1,5 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { motion } from "framer-motion";
 import { Briefcase, ChevronLeft, ChevronRight, ExternalLink, Heart, Plus, Sparkles, Trash2 } from "lucide-react";
 import type {
   CreateJobInput,
@@ -48,6 +49,50 @@ const SOURCE_LABELS: Record<JobSource, string> = {
   jsearch: "External",
 };
 
+// Job data only yields states that already have a posting — for India specifically, the full
+// state/UT list is shown regardless, so the filter is browsable before any listing exists there.
+const INDIA_STATES = [
+  "Andhra Pradesh",
+  "Arunachal Pradesh",
+  "Assam",
+  "Bihar",
+  "Chhattisgarh",
+  "Goa",
+  "Gujarat",
+  "Haryana",
+  "Himachal Pradesh",
+  "Jharkhand",
+  "Karnataka",
+  "Kerala",
+  "Madhya Pradesh",
+  "Maharashtra",
+  "Manipur",
+  "Meghalaya",
+  "Mizoram",
+  "Nagaland",
+  "Odisha",
+  "Punjab",
+  "Rajasthan",
+  "Sikkim",
+  "Tamil Nadu",
+  "Telangana",
+  "Tripura",
+  "Uttar Pradesh",
+  "Uttarakhand",
+  "West Bengal",
+  "Andaman and Nicobar Islands",
+  "Chandigarh",
+  "Dadra and Nagar Haveli and Daman and Diu",
+  "Delhi",
+  "Jammu and Kashmir",
+  "Ladakh",
+  "Lakshadweep",
+  "Puducherry",
+];
+// Real-world country values are inconsistent — JSearch returns ISO codes ("IN"), manually
+// posted jobs tend to use the full name ("India") — so both are treated as the same country.
+const INDIA_ALIASES = new Set(["india", "in"]);
+
 function formatSalary(min: number | null, max: number | null): string | null {
   if (min == null && max == null) return null;
   if (min != null && max != null) return `${min.toLocaleString()} – ${max.toLocaleString()}`;
@@ -86,6 +131,45 @@ export function JobBoardPage() {
   }, [salaryMinInput]);
 
   const { data: filterOptions } = useQuery({ queryKey: ["jobFilters"], queryFn: fetchJobFilterOptions });
+
+  const locationOptions = useMemo(() => filterOptions?.locationOptions ?? [], [filterOptions]);
+  const countries = useMemo(
+    () => Array.from(new Set([...locationOptions.map((o) => o.country).filter((c): c is string => !!c), "India"])).sort(),
+    [locationOptions],
+  );
+  const states = useMemo(() => {
+    const fromData = locationOptions
+      .filter((o) => !filters.country || o.country === filters.country)
+      .map((o) => o.state)
+      .filter((s): s is string => !!s);
+    const extra = filters.country && INDIA_ALIASES.has(filters.country.toLowerCase()) ? INDIA_STATES : [];
+    return Array.from(new Set([...fromData, ...extra])).sort();
+  }, [locationOptions, filters.country]);
+  const cities = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          locationOptions
+            .filter((o) => (!filters.country || o.country === filters.country) && (!filters.state || o.state === filters.state))
+            .map((o) => o.city)
+            .filter((c): c is string => !!c),
+        ),
+      ).sort(),
+    [locationOptions, filters.country, filters.state],
+  );
+
+  function setCountry(v: string) {
+    setPage(1);
+    setFilters((f) => ({ ...f, country: v || undefined, state: undefined, city: undefined }));
+  }
+  function setLocationState(v: string) {
+    setPage(1);
+    setFilters((f) => ({ ...f, state: v || undefined, city: undefined }));
+  }
+  function setCity(v: string) {
+    setPage(1);
+    setFilters((f) => ({ ...f, city: v || undefined }));
+  }
   const { data, isLoading } = useQuery({
     queryKey: ["jobs", filters, page],
     queryFn: () => searchJobs(filters, page),
@@ -115,7 +199,12 @@ export function JobBoardPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-start justify-between gap-4">
+      <motion.div
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.35, ease: "easeOut" }}
+        className="flex items-start justify-between gap-4"
+      >
         <div>
           <h1 className="flex items-center gap-2 text-2xl font-semibold text-ink-900 dark:text-white">
             <Briefcase className="h-5 w-5 text-brand-500" /> Job Board
@@ -127,7 +216,7 @@ export function JobBoardPage() {
             <Plus className="h-4 w-4" /> {showForm ? "Cancel" : "Post a job"}
           </Button>
         )}
-      </div>
+      </motion.div>
 
       {showForm && <PostJobForm onDone={() => setShowForm(false)} />}
 
@@ -156,13 +245,14 @@ export function JobBoardPage() {
               <Heart className={cn("h-3.5 w-3.5", filters.savedOnly && "fill-current")} /> Saved only
             </button>
 
-            {filterOptions && filterOptions.locations.length > 0 && (
-              <FilterSelect
-                label="Location"
-                value={filters.location ?? ""}
-                options={filterOptions.locations}
-                onChange={(v) => setFilter("location", v || undefined)}
-              />
+            {countries.length > 0 && (
+              <FilterSelect label="Country" value={filters.country ?? ""} options={countries} onChange={setCountry} />
+            )}
+            {states.length > 0 && (
+              <FilterSelect label="State" value={filters.state ?? ""} options={states} onChange={setLocationState} />
+            )}
+            {cities.length > 0 && (
+              <FilterSelect label="City" value={filters.city ?? ""} options={cities} onChange={setCity} />
             )}
 
             {filterOptions && filterOptions.companies.length > 0 && (
@@ -271,16 +361,24 @@ export function JobBoardPage() {
             <EmptyState title="No jobs found" description="Try widening your search or clearing a filter." />
           ) : (
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              {data.items.map((job) => (
-                <JobCard
+              {data.items.map((job, i) => (
+                <motion.div
                   key={job.id}
-                  job={job}
-                  canManage={isRecruiter && job.postedBy === user?.id}
-                  onDelete={() => deleteMutation.mutate(job.id)}
-                  deleting={deleteMutation.isPending}
-                  onToggleSave={() => saveMutation.mutate(job)}
-                  saving={saveMutation.isPending}
-                />
+                  initial={{ opacity: 0, y: 12 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.3, delay: i * 0.04, ease: "easeOut" }}
+                  whileHover={{ y: -5, scale: 1.015 }}
+                  className="group"
+                >
+                  <JobCard
+                    job={job}
+                    canManage={isRecruiter && job.postedBy === user?.id}
+                    onDelete={() => deleteMutation.mutate(job.id)}
+                    deleting={deleteMutation.isPending}
+                    onToggleSave={() => saveMutation.mutate(job)}
+                    saving={saveMutation.isPending}
+                  />
+                </motion.div>
               ))}
             </div>
           )}
@@ -388,7 +486,7 @@ function JobCard({
   saving: boolean;
 }) {
   return (
-    <Card className="flex flex-col">
+    <Card className="flex h-full flex-col transition-shadow duration-300 group-hover:shadow-lift">
       <CardBody className="flex flex-1 flex-col">
         <div className="flex items-start justify-between gap-2">
           <div className="flex flex-wrap items-center gap-1.5">

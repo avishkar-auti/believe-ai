@@ -1,7 +1,9 @@
 import axios from "axios";
-import type { ApiErrorResponse } from "@believe-ai/shared";
 import { firebaseAuth } from "./firebase.js";
 
+/** Talks to apps/backend (FastAPI) — the sole backend now that Node has
+ * been decommissioned. Carries the caller's own Firebase ID token; the
+ * backend verifies it against the same Firebase project. */
 export const apiClient = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL,
 });
@@ -24,12 +26,21 @@ export class ApiError extends Error {
   }
 }
 
+interface FastApiErrorBody {
+  detail?: string;
+  success?: false;
+  error?: { code: string; message: string };
+}
+
 apiClient.interceptors.response.use(
   (res) => res,
   (err) => {
-    const body = err.response?.data as ApiErrorResponse | undefined;
-    if (body && !body.success) {
+    const body = err.response?.data as FastApiErrorBody | undefined;
+    if (body?.error) {
       throw new ApiError(body.error.code, body.error.message);
+    }
+    if (body?.detail) {
+      throw new ApiError("BACKEND_ERROR", body.detail);
     }
     throw err;
   },

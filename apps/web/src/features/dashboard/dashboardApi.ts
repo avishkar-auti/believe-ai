@@ -1,4 +1,4 @@
-import type { ApiSuccessResponse, Campaign } from "@believe-ai/shared";
+import type { Campaign } from "@believe-ai/shared";
 import { apiClient } from "../../lib/apiClient.js";
 
 export interface DashboardSummary {
@@ -14,6 +14,6 @@ export interface DashboardSummary {
 }
 
 export async function fetchDashboard(): Promise<DashboardSummary> {
-  const res = await apiClient.get<ApiSuccessResponse<DashboardSummary>>("/analytics/dashboard");
-  return res.data.data;
+  const res = await apiClient.get<DashboardSummary>("/analytics/dashboard");
+  return res.data;
 }

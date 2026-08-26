@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { AnimatePresence, motion } from "framer-motion";
 import { Plus, Trash2, Upload } from "lucide-react";
 import { Button } from "../../components/ui/Button.js";
 import { Input } from "../../components/ui/Input.js";
@@ -49,7 +50,12 @@ export function ContactsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <motion.div
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.35, ease: "easeOut" }}
+        className="flex items-center justify-between"
+      >
         <div>
           <h1 className="text-2xl font-semibold text-ink-900 dark:text-white">Contacts</h1>
           <p className="text-sm text-ink-500 dark:text-ink-400">Your outreach audience, in one place.</p>
@@ -62,42 +68,52 @@ export function ContactsPage() {
             <Plus className="h-4 w-4" /> Add contact
           </Button>
         </div>
-      </div>
+      </motion.div>
 
-      {showAddForm && (
-        <Card>
-          <CardBody>
-            <form className="grid grid-cols-1 gap-3 sm:grid-cols-4" onSubmit={handleAddSubmit}>
-              <Input
-                placeholder="First name"
-                required
-                value={form.firstName}
-                onChange={(e) => setForm((f) => ({ ...f, firstName: e.target.value }))}
-              />
-              <Input
-                placeholder="Last name"
-                value={form.lastName}
-                onChange={(e) => setForm((f) => ({ ...f, lastName: e.target.value }))}
-              />
-              <Input
-                type="email"
-                placeholder="Email"
-                required
-                value={form.email}
-                onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
-              />
-              <Input
-                placeholder="Company"
-                value={form.company}
-                onChange={(e) => setForm((f) => ({ ...f, company: e.target.value }))}
-              />
-              <Button type="submit" className="sm:col-span-4" disabled={createMutation.isPending}>
-                {createMutation.isPending ? "Adding…" : "Add contact"}
-              </Button>
-            </form>
-          </CardBody>
-        </Card>
-      )}
+      <AnimatePresence>
+        {showAddForm && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            exit={{ opacity: 0, height: 0 }}
+            transition={{ duration: 0.2, ease: "easeOut" }}
+            className="overflow-hidden"
+          >
+            <Card>
+              <CardBody>
+                <form className="grid grid-cols-1 gap-3 sm:grid-cols-4" onSubmit={handleAddSubmit}>
+                  <Input
+                    placeholder="First name"
+                    required
+                    value={form.firstName}
+                    onChange={(e) => setForm((f) => ({ ...f, firstName: e.target.value }))}
+                  />
+                  <Input
+                    placeholder="Last name"
+                    value={form.lastName}
+                    onChange={(e) => setForm((f) => ({ ...f, lastName: e.target.value }))}
+                  />
+                  <Input
+                    type="email"
+                    placeholder="Email"
+                    required
+                    value={form.email}
+                    onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
+                  />
+                  <Input
+                    placeholder="Company"
+                    value={form.company}
+                    onChange={(e) => setForm((f) => ({ ...f, company: e.target.value }))}
+                  />
+                  <Button type="submit" className="sm:col-span-4" disabled={createMutation.isPending}>
+                    {createMutation.isPending ? "Adding…" : "Add contact"}
+                  </Button>
+                </form>
+              </CardBody>
+            </Card>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <Input placeholder="Search contacts…" value={search} onChange={(e) => setSearch(e.target.value)} className="max-w-sm" />
 
@@ -111,41 +127,46 @@ export function ContactsPage() {
           description="Add a contact manually or import a CSV to build your audience."
         />
       ) : (
-        <Card>
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
-              <thead className="border-b border-ink-100 text-ink-500 dark:border-ink-800 dark:text-ink-400">
-                <tr>
-                  <th className="px-5 py-3 font-medium">Name</th>
-                  <th className="px-5 py-3 font-medium">Email</th>
-                  <th className="px-5 py-3 font-medium">Company</th>
-                  <th className="px-5 py-3 font-medium">Status</th>
-                  <th className="px-5 py-3" />
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-ink-100 dark:divide-ink-800">
-                {data.items.map((c) => (
-                  <tr key={c.id}>
-                    <td className="px-5 py-3 font-medium text-ink-900 dark:text-white">
+        <Card className="overflow-hidden">
+          <ul className="divide-y divide-ink-100 dark:divide-ink-800">
+            {data.items.map((c, i) => (
+              <motion.li
+                key={c.id}
+                initial={{ opacity: 0, x: -6 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ duration: 0.25, delay: i * 0.03 }}
+                className="group flex items-center justify-between gap-4 px-5 py-3.5 transition-colors hover:bg-ink-50 dark:hover:bg-ink-800/60"
+              >
+                <div className="flex min-w-0 items-center gap-3">
+                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand-500/10 text-xs font-semibold text-brand-600 dark:text-brand-300">
+                    {c.firstName.charAt(0).toUpperCase()}
+                    {c.lastName.charAt(0).toUpperCase()}
+                  </span>
+                  <div className="min-w-0">
+                    <div className="truncate font-medium text-ink-900 dark:text-white">
                       {c.firstName} {c.lastName}
-                    </td>
-                    <td className="px-5 py-3 text-ink-600 dark:text-ink-300">{c.email}</td>
-                    <td className="px-5 py-3 text-ink-600 dark:text-ink-300">{c.company ?? "—"}</td>
-                    <td className="px-5 py-3">
-                      <Badge tone={c.subscribed ? "success" : "neutral"}>
-                        {c.subscribed ? "Subscribed" : "Unsubscribed"}
-                      </Badge>
-                    </td>
-                    <td className="px-5 py-3 text-right">
-                      <Button variant="ghost" size="sm" onClick={() => deleteMutation.mutate(c.id)}>
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                    </div>
+                    <div className="truncate text-xs text-ink-400">
+                      {c.email}
+                      {c.company ? ` · ${c.company}` : ""}
+                    </div>
+                  </div>
+                </div>
+                <div className="flex shrink-0 items-center gap-3">
+                  <Badge tone={c.subscribed ? "success" : "neutral"}>
+                    {c.subscribed ? "Subscribed" : "Unsubscribed"}
+                  </Badge>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => deleteMutation.mutate(c.id)}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
+              </motion.li>
+            ))}
+          </ul>
         </Card>
       )}
 

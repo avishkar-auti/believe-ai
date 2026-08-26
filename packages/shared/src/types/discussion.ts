@@ -3,6 +3,11 @@
  * onto both the thread and each reply so the list/detail views never need a
  * separate user lookup just to render who said what.
  */
+export interface CreateDiscussionInput {
+  title: string;
+  body: string;
+}
+
 export interface DiscussionReply {
   id: string;
   authorId: string;

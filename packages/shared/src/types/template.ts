@@ -1,6 +1,14 @@
 /**
  * Reusable email template with {{variable}} placeholders.
  */
+export interface CreateTemplateInput {
+  name: string;
+  subject: string;
+  body: string;
+}
+
+export type UpdateTemplateInput = Partial<CreateTemplateInput>;
+
 export interface Template {
   id: string;
   userId: string;

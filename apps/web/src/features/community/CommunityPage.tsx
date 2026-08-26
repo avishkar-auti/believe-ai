@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { motion } from "framer-motion";
 import { ArrowBigUp, MessageSquare, Plus, Trash2, Users } from "lucide-react";
 import type { Discussion } from "@believe-ai/shared";
 import { Button } from "../../components/ui/Button.js";
@@ -43,7 +44,12 @@ export function CommunityPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-start justify-between gap-4">
+      <motion.div
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.35, ease: "easeOut" }}
+        className="flex items-start justify-between gap-4"
+      >
         <div>
           <h1 className="flex items-center gap-2 text-2xl font-semibold text-ink-900 dark:text-white">
             <Users className="h-5 w-5 text-brand-500" /> Community
@@ -53,7 +59,7 @@ export function CommunityPage() {
         <Button onClick={() => setShowForm((s) => !s)}>
           <Plus className="h-4 w-4" /> {showForm ? "Cancel" : "New post"}
         </Button>
-      </div>
+      </motion.div>
 
       {showForm && (
         <Card>
@@ -75,16 +81,22 @@ export function CommunityPage() {
         <EmptyState title="No posts yet" description="Start the conversation above." />
       ) : (
         <div className="space-y-3">
-          {data.items.map((thread) => (
-            <ThreadCard
+          {data.items.map((thread, i) => (
+            <motion.div
               key={thread.id}
-              thread={thread}
-              expanded={expandedId === thread.id}
-              onToggleExpand={() => setExpandedId((id) => (id === thread.id ? null : thread.id))}
-              onUpvote={() => upvoteMutation.mutate(thread.id)}
-              canDelete={thread.authorId === user?.id}
-              onDelete={() => deleteMutation.mutate(thread.id)}
-            />
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.25, delay: i * 0.03, ease: "easeOut" }}
+            >
+              <ThreadCard
+                thread={thread}
+                expanded={expandedId === thread.id}
+                onToggleExpand={() => setExpandedId((id) => (id === thread.id ? null : thread.id))}
+                onUpvote={() => upvoteMutation.mutate(thread.id)}
+                canDelete={thread.authorId === user?.id}
+                onDelete={() => deleteMutation.mutate(thread.id)}
+              />
+            </motion.div>
           ))}
         </div>
       )}
@@ -119,13 +131,13 @@ function ThreadCard({
   });
 
   return (
-    <Card>
+    <Card className="transition-shadow duration-300 hover:shadow-lift">
       <CardBody className="space-y-3">
         <div className="flex items-start gap-3">
           <button
             type="button"
             onClick={onUpvote}
-            className={`flex flex-col items-center rounded-lg px-2 py-1 text-xs ${
+            className={`flex flex-col items-center rounded-lg px-2 py-1 text-xs transition-transform duration-150 hover:scale-105 active:scale-95 ${
               thread.upvotedByMe
                 ? "bg-brand-500/10 text-brand-600 dark:text-brand-300"
                 : "text-ink-400 hover:bg-ink-50 dark:hover:bg-ink-800"

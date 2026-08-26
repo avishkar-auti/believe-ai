@@ -4,6 +4,15 @@
  * and personalization call so output can reference the sender's real
  * situation instead of staying generic.
  */
+export interface UpdateUserContextInput {
+  aboutMe?: string | null;
+  companyInfo?: string | null;
+  servicesOrProducts?: string | null;
+  skillsAndExperience?: string | null;
+  achievements?: string | null;
+  targetAudience?: string | null;
+}
+
 export interface UserContext {
   userId: string;
   aboutMe: string | null;

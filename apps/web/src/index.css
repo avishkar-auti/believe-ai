@@ -7,6 +7,13 @@
 @layer base {
   html {
     @apply antialiased;
+    scroll-behavior: smooth;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    html {
+      scroll-behavior: auto;
+    }
   }
 
   body {
@@ -26,7 +33,7 @@
   /* The periwinkle canvas that white page-cards sit on, as seen in the hero
      and section bands. Kept as a component class so sections stay readable. */
   .canvas-band {
-    @apply bg-canvas dark:bg-ink-800;
+    @apply bg-canvas dark:bg-ink-900;
   }
 
   /* Small rounded-square icon chip that sits above a feature card's title. */

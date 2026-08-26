@@ -19,6 +19,23 @@ export const DATE_POSTED_OPTIONS: { value: DatePostedFilter; label: string }[] =
   { value: "30d", label: "Past month" },
 ];
 
+export interface CreateJobInput {
+  title: string;
+  company: string;
+  location?: string | null;
+  description: string;
+  skills?: string[];
+  employmentType?: EmploymentType | null;
+  workMode?: WorkMode | null;
+  experienceLevel?: ExperienceLevel | null;
+  salaryMin?: number | null;
+  salaryMax?: number | null;
+  recruiterLinkedIn?: string | null;
+  applyUrl?: string | null;
+}
+
+export type UpdateJobInput = Partial<CreateJobInput>;
+
 export interface Job {
   id: string;
   source: JobSource;
@@ -43,16 +60,27 @@ export interface Job {
   isSaved?: boolean;
 }
 
+/** One distinct parsed location, e.g. from "Chicago, Illinois, US" — best-effort split of the
+ * free-text location string, since no job stores structured geo fields. */
+export interface LocationOption {
+  country: string | null;
+  state: string | null;
+  city: string | null;
+}
+
 /** Distinct facet values for populating the Job Board's filter sidebar. */
 export interface JobFilterOptions {
   locations: string[];
+  locationOptions: LocationOption[];
   companies: string[];
   skills: string[];
 }
 
 export interface JobSearchFilters {
   q?: string;
-  location?: string;
+  country?: string;
+  state?: string;
+  city?: string;
   company?: string;
   employmentType?: EmploymentType;
   workMode?: WorkMode;

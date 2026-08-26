@@ -29,9 +29,10 @@ apps/web/.vite/
 # misc
 *.tsbuildinfo
 
-# python (apps/ai-service)
+# python (apps/backend)
 .venv/
 __pycache__/
 *.pyc
 .mypy_cache/
 .ruff_cache/
+apps/backend/data/

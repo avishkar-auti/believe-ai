@@ -37,6 +37,22 @@ export interface CampaignFollowUp {
   subjectOverride: string | null;
 }
 
+export interface CreateCampaignInput {
+  name: string;
+  subject: string;
+  templateId: string;
+  audienceContactIds: string[];
+  scheduledAt?: string | null;
+  timezone?: string;
+  dailyLimit?: number;
+  personalizationEnabled?: boolean;
+  trackingEnabled?: boolean;
+  followUps?: CampaignFollowUp[];
+  stopOnReply?: boolean;
+}
+
+export type UpdateCampaignInput = Partial<CreateCampaignInput>;
+
 export interface Campaign {
   id: string;
   userId: string;

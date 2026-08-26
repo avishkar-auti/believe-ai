@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { motion } from "framer-motion";
 import { Target, Trash2 } from "lucide-react";
 import { Button } from "../../components/ui/Button.js";
 import { Input } from "../../components/ui/Input.js";
@@ -30,16 +31,16 @@ export function CareerFitPage() {
 
   return (
     <div className="space-y-6">
-      <div>
+      <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.35, ease: "easeOut" }}>
         <h1 className="flex items-center gap-2 text-2xl font-semibold text-ink-900 dark:text-white">
           <Target className="h-5 w-5 text-brand-500" /> Career Fit
         </h1>
         <p className="text-sm text-ink-500 dark:text-ink-400">
           An honest read on your strengths and gaps, grounded in your uploaded resume.
         </p>
-      </div>
+      </motion.div>
 
-      <Card>
+      <Card className="transition-shadow duration-300 hover:shadow-lift">
         <CardBody className="flex flex-col gap-3 sm:flex-row">
           <Input
             placeholder="Target role (optional) — e.g. Senior Backend Engineer"
@@ -66,8 +67,14 @@ export function CareerFitPage() {
         <EmptyState title="No assessments yet" description="Generate your first career-fit assessment above." />
       ) : (
         <div className="space-y-4">
-          {data.items.map((fit) => (
-            <Card key={fit.id}>
+          {data.items.map((fit, i) => (
+            <motion.div
+              key={fit.id}
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.3, delay: i * 0.05, ease: "easeOut" }}
+            >
+            <Card className="transition-shadow duration-300 hover:shadow-lift">
               <CardHeader className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium text-ink-900 dark:text-white">
@@ -117,6 +124,7 @@ export function CareerFitPage() {
                 )}
               </CardBody>
             </Card>
+            </motion.div>
           ))}
         </div>
       )}

@@ -20,6 +20,17 @@ export interface Contact {
   updatedAt: string;
 }
 
+export interface CreateContactInput {
+  firstName: string;
+  lastName?: string;
+  email: string;
+  company?: string | null;
+  jobTitle?: string | null;
+  phone?: string | null;
+  tags?: string[];
+  notes?: string | null;
+}
+
 export interface CsvColumnMapping {
   firstName?: string;
   lastName?: string;
