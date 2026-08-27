@@ -17,6 +17,7 @@ from bson import ObjectId
 from fastapi import Header, HTTPException, status
 from firebase_admin import auth as firebase_auth
 from firebase_admin import credentials
+from pymongo.errors import DuplicateKeyError
 
 from core.config import get_settings
 from core.db import get_database
@@ -72,7 +73,17 @@ async def resolve_mongo_user_id(firebase_uid: str) -> ObjectId:
         name=firebase_user.display_name or "",
         avatar=firebase_user.photo_url,
     )
-    await user.insert()
+    try:
+        await user.insert()
+    except DuplicateKeyError:
+        # A brand-new sign-in fires many parallel requests (dashboard widgets
+        # each resolving the current user independently), so more than one
+        # can race this find-or-create at once. The loser just re-reads what
+        # the winner already inserted instead of surfacing a 500.
+        existing = await users_repository.find_by_firebase_uid(get_database(), firebase_uid)
+        if existing:
+            return existing["_id"]
+        raise
     assert user.id is not None
     return user.id
 

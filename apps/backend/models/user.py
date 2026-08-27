@@ -42,4 +42,14 @@ class User(Document):
 
     class Settings:
         name = "users"
-        indexes = [IndexModel([("username", 1)], unique=True, sparse=True)]
+        indexes = [
+            # A plain sparse index only skips documents missing the field —
+            # Beanie serializes username=None as an explicit `null`, which a
+            # sparse index still indexes, so two usernameless users collide.
+            # $type: "string" excludes null (and missing) values instead.
+            IndexModel(
+                [("username", 1)],
+                unique=True,
+                partialFilterExpression={"username": {"$type": "string"}},
+            )
+        ]
