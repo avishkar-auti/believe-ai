@@ -21,6 +21,8 @@ async def get_public_profile(username: str) -> PublicProfileDto:
         avatar=user.avatar,
         headline=user.headline,
         bio=user.bio,
+        about=user.about,
+        location=user.location,
         socialLinks=user.socialLinks,
         cardTheme=user.cardTheme,
     )
