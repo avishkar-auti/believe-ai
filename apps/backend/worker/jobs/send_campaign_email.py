@@ -24,13 +24,13 @@ from agents.personalization_agent import personalize_email
 from core.config import get_settings
 from core.link_signing import rewrite_links_for_tracking
 from core.logging import get_logger
-from email_providers.base import SendEmailInput
+from email_providers.base import EmailAttachment, SendEmailInput
 from models.campaign import Campaign
 from models.contact import Contact
 from models.email_log import EmailLog
 from models.template import Template
 from models.user import User
-from repositories import email_log_repository, unsubscribe_repository, user_context_repository
+from repositories import email_log_repository, resume_repository, unsubscribe_repository, user_context_repository
 from schemas.ai import AiPersonalizeRequest, ContactPersonalizationInput
 from services import notification_service
 from services.email_provider_resolver import resolve_provider
@@ -42,6 +42,49 @@ logger = get_logger(__name__)
 
 _MAX_TRIES = 5
 _BASE_BACKOFF_SECONDS = 5
+
+# Tokens whose real value the AI provider is never given — it can't fill
+# these in on its own, and asking it to "preserve this exact {{}} syntax" in
+# free-form rewriting isn't reliable. Split off before the AI call instead;
+# see _split_signature().
+_SENDER_ONLY_TOKENS = {"senderName", "senderCompany", "linkedin", "github"}
+_SENDER_TOKEN_RE = re.compile(r"{{\s*(?:" + "|".join(_SENDER_ONLY_TOKENS) + r")\s*}}")
+
+
+def _split_signature(body: str) -> tuple[str, str]:
+    """Splits a template body into (content, signature) at the first
+    sender-only token — everything from there on (typically a "Best
+    regards, {{senderName}} / {{linkedin}} | {{github}}" sign-off) is
+    treated as the signature. Only `content` is sent to the AI for
+    personalization; `signature` is resolved by plain interpolate() and
+    appended to the AI's output afterward. This makes {{senderName}} /
+    {{linkedin}} / {{github}} resolve to the sender's real name and links
+    the same way whether or not AI personalization is on — the AI never
+    sees or has to preserve those tokens verbatim.
+
+    Returns ("", body's sender tokens) only in the degenerate case where the
+    whole template is a signature — the AI still gets called with an empty
+    body rather than special-cased, since that's the template author's own
+    (unusual) choice, not something to silently work around."""
+    match = _SENDER_TOKEN_RE.search(body)
+    if not match:
+        return body, ""
+    return body[: match.start()], body[match.start() :]
+
+
+def _plain_text_to_html(text: str) -> str:
+    """Every template body — and the AI's personalized rewrite of one — is
+    plain text with blank-line-separated paragraphs (see prompts/email.py's
+    schema and TemplatesPage.tsx's plain <Textarea>), not HTML. Dropped
+    straight into an email's HTML part, literal newlines collapse per normal
+    HTML whitespace rules and the whole message reads as one run-on
+    paragraph. This is the one place that turns real paragraph/line breaks
+    back into <p>/<br> so the sent email actually looks like the plain text
+    it was authored as. The {{linkedin}}/{{github}} values are already real
+    `<a href>` fragments by the time they're interpolated in (see the values
+    dict above) — safe to leave untouched here."""
+    paragraphs = re.split(r"\n\s*\n", text.strip())
+    return "".join(f"<p>{p.replace(chr(10), '<br>')}</p>" for p in paragraphs if p.strip())
 
 
 async def _maybe_complete_campaign(campaign_id: PydanticObjectId) -> None:
@@ -134,6 +177,9 @@ async def _build_personalized_content(
     if not personalization_enabled:
         return fallback
 
+    content, signature = _split_signature(template_body)
+    signature_html = interpolate(signature, present_values) if signature else ""
+
     try:
         profile = await user_context_repository.find_by_user_id(user_id)
         sender_context = (
@@ -155,7 +201,7 @@ async def _build_personalized_content(
             get_settings(),
             AiPersonalizeRequest(
                 templateSubject=subject_source,
-                templateBody=template_body,
+                templateBody=content,
                 contact=ContactPersonalizationInput(
                     firstName=contact.firstName,
                     lastName=contact.lastName,
@@ -165,7 +211,7 @@ async def _build_personalized_content(
                 senderContext=sender_context,
             ),
         )
-        return result.subject, result.body
+        return result.subject, result.body + signature_html
     except Exception as err:  # noqa: BLE001 — AI assists, never blocks the core send workflow
         logger.warning("AI personalization failed for user %s, falling back to template interpolation: %s", user_id, err)
         return fallback
@@ -217,6 +263,8 @@ async def _send(email_log_id: str) -> None:
         await _fail_log(log.id, log.campaignId, "Recipient is unsubscribed")
         return
 
+    linkedin_url = sender.socialLinks.get("linkedin")
+    github_url = sender.socialLinks.get("github")
     values: dict[str, str | None] = {
         "firstName": contact.firstName,
         "lastName": contact.lastName,
@@ -224,10 +272,15 @@ async def _send(email_log_id: str) -> None:
         "jobTitle": contact.jobTitle,
         "senderName": sender.name or None,
         "senderCompany": sender.company,
+        # Embedded as real anchors (not the bare URL) so {{linkedin}}/{{github}}
+        # render as clickable links wherever they're dropped into the body —
+        # e.g. a "{{senderName}}\n{{linkedin}} | {{github}}" sign-off.
+        "linkedin": f'<a href="{linkedin_url}">LinkedIn</a>' if linkedin_url else None,
+        "github": f'<a href="{github_url}">GitHub</a>' if github_url else None,
     }
 
     subject_source = (campaign.subject or template.subject) if log.stepIndex == 0 else (subject_override or template.subject)
-    subject, body_html = await _build_personalized_content(
+    subject, body_text = await _build_personalized_content(
         personalization_enabled=campaign.personalizationEnabled,
         user_id=log.userId,
         subject_source=subject_source,
@@ -244,6 +297,12 @@ async def _send(email_log_id: str) -> None:
     )
     unsubscribe_url = f"{api_base_url}/t/unsubscribe/{log.trackingToken}"
 
+    # The plain-text alternative keeps the original links — a text-only client
+    # can't be click-tracked anyway, and bare redirect URLs read as suspicious.
+    text = f"{re.sub('<[^>]+>', '', body_text)}\n\nUnsubscribe: {unsubscribe_url}"
+
+    body_html = _plain_text_to_html(body_text)
+
     # Route the body's links through the click-tracking endpoint. The unsubscribe
     # link is deliberately excluded — opting out must never look like engagement,
     # and it has to keep working even if tracking is off.
@@ -258,15 +317,29 @@ async def _send(email_log_id: str) -> None:
         f'{tracked_body_html}{tracking_pixel}<p style="font-size:12px;color:#888;margin-top:24px">'
         f'<a href="{unsubscribe_url}">Unsubscribe</a></p>'
     )
-    # The plain-text alternative keeps the original links — a text-only client
-    # can't be click-tracked anyway, and bare redirect URLs read as suspicious.
-    text = f"{re.sub('<[^>]+>', '', body_html)}\n\nUnsubscribe: {unsubscribe_url}"
 
     provider = await resolve_provider(settings, log.userId)
 
+    attachments: list[EmailAttachment] = []
+    if campaign.resumeId:
+        resume = await resume_repository.find_by_id(log.userId, campaign.resumeId)
+        resume_file = await resume_repository.find_file_by_resume_id(campaign.resumeId) if resume else None
+        if resume and resume_file:
+            attachments.append(
+                EmailAttachment(
+                    filename=f"{resume.targetRole or resume.fileName}.pdf",
+                    content=resume_file.data,
+                    content_type="application/pdf",
+                )
+            )
+        else:
+            logger.warning("Campaign %s references resume %s which no longer exists — sending without it", campaign.id, campaign.resumeId)
+
     # Let send failures propagate so the caller retries with backoff; only
     # once retries are exhausted does the log get marked FAILED.
-    result = await provider.send_email(SendEmailInput(from_email=sender.email, to=contact.email, subject=subject, html=html, text=text))
+    result = await provider.send_email(
+        SendEmailInput(from_email=sender.email, to=contact.email, subject=subject, html=html, text=text, attachments=attachments)
+    )
 
     log.status = "SENT"
     log.providerMessageId = result.provider_message_id

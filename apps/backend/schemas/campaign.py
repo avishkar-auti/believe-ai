@@ -25,6 +25,9 @@ class CreateCampaignInput(BaseModel):
     name: str = Field(min_length=1)
     subject: str = Field(min_length=1)
     templateId: str = Field(min_length=1)
+    # Attached to every send in this campaign, if set. Opt-in per campaign —
+    # never auto-filled from whichever resume is Primary.
+    resumeId: str | None = None
     audienceContactIds: list[str] = Field(min_length=1)
     scheduledAt: str | None = None
     timezone: str = Field(default="UTC", min_length=1)
@@ -39,6 +42,7 @@ class UpdateCampaignInput(BaseModel):
     name: str | None = Field(default=None, min_length=1)
     subject: str | None = Field(default=None, min_length=1)
     templateId: str | None = Field(default=None, min_length=1)
+    resumeId: str | None = None
     audienceContactIds: list[str] | None = Field(default=None, min_length=1)
     scheduledAt: str | None = None
     timezone: str | None = Field(default=None, min_length=1)
@@ -55,6 +59,7 @@ class CampaignDto(BaseModel):
     name: str
     subject: str
     templateId: str
+    resumeId: str | None
     audienceContactIds: list[str]
     status: CampaignStatus
     scheduledAt: str | None

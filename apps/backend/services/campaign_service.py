@@ -13,7 +13,14 @@ from bson import ObjectId
 from core.errors import InvalidStateTransitionError, NotFoundError, ValidationError
 from models.campaign import CAMPAIGN_STATUS_TRANSITIONS, Campaign, CampaignStatus
 from models.email_log import EmailLog
-from repositories import campaign_repository, contact_repository, email_log_repository, template_repository, unsubscribe_repository
+from repositories import (
+    campaign_repository,
+    contact_repository,
+    email_log_repository,
+    resume_repository,
+    template_repository,
+    unsubscribe_repository,
+)
 from schemas.campaign import (
     CampaignAnalytics,
     CampaignDto,
@@ -38,6 +45,7 @@ def _to_dto(doc: Campaign) -> CampaignDto:
         name=doc.name,
         subject=doc.subject,
         templateId=str(doc.templateId),
+        resumeId=str(doc.resumeId) if doc.resumeId else None,
         audienceContactIds=[str(cid) for cid in doc.audienceContactIds],
         status=doc.status,
         scheduledAt=doc.scheduledAt.isoformat() if doc.scheduledAt else None,
@@ -101,6 +109,10 @@ async def create(user_id: ObjectId, input_: CreateCampaignInput) -> CampaignDto:
     if not template:
         raise ValidationError("Template not found")
 
+    resume_id = ObjectId(input_.resumeId) if input_.resumeId else None
+    if resume_id and not await resume_repository.find_by_id(user_id, resume_id):
+        raise ValidationError("Resume not found")
+
     audience_ids = [ObjectId(cid) for cid in input_.audienceContactIds]
     contacts = await contact_repository.find_many_by_ids(audience_ids, user_id)
     if len(contacts) != len(audience_ids):
@@ -117,6 +129,7 @@ async def create(user_id: ObjectId, input_: CreateCampaignInput) -> CampaignDto:
             "name": input_.name,
             "subject": input_.subject,
             "templateId": template_id,
+            "resumeId": resume_id,
             "audienceContactIds": audience_ids,
             "scheduledAt": input_.scheduledAt,
             "timezone": input_.timezone,
@@ -140,6 +153,8 @@ async def update(campaign_id: ObjectId, user_id: ObjectId, input_: UpdateCampaig
     updates: dict[str, Any] = input_.model_dump(exclude_unset=True)
     if "templateId" in updates:
         updates["templateId"] = ObjectId(updates["templateId"])
+    if "resumeId" in updates:
+        updates["resumeId"] = ObjectId(updates["resumeId"]) if updates["resumeId"] else None
     if "audienceContactIds" in updates:
         updates["audienceContactIds"] = [ObjectId(cid) for cid in updates["audienceContactIds"]]
     if "followUps" in updates:

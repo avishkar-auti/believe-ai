@@ -34,6 +34,9 @@ class Campaign(Document):
     name: str
     subject: str
     templateId: PydanticObjectId
+    # Attached to every send in this campaign, if set — an explicit per-campaign
+    # opt-in, never auto-filled from whichever resume happens to be Primary.
+    resumeId: PydanticObjectId | None = None
     audienceContactIds: list[PydanticObjectId] = Field(default_factory=list)
     status: CampaignStatus = "DRAFT"
     scheduledAt: datetime | None = None

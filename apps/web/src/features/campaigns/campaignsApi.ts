@@ -1,5 +1,6 @@
 import type {
   AiCampaignInsightResult,
+  AiPersonalizeResult,
   Campaign,
   CampaignAnalytics,
   CreateCampaignInput,
@@ -51,5 +52,10 @@ export async function markRecipientReplied(campaignId: string, contactId: string
 
 export async function fetchCampaignInsights(id: string) {
   const res = await apiClient.get<AiCampaignInsightResult>(`/campaigns/${id}/insights`);
+  return res.data;
+}
+
+export async function personalizeForContact(campaignId: string, contactId: string) {
+  const res = await apiClient.post<AiPersonalizeResult>(`/campaigns/${campaignId}/contacts/${contactId}/personalize`);
   return res.data;
 }

@@ -41,6 +41,8 @@ export interface CreateCampaignInput {
   name: string;
   subject: string;
   templateId: string;
+  /** Attached to every send in this campaign, if set. Opt-in per campaign — never auto-filled from the Primary resume. */
+  resumeId?: string | null;
   audienceContactIds: string[];
   scheduledAt?: string | null;
   timezone?: string;
@@ -59,6 +61,7 @@ export interface Campaign {
   name: string;
   subject: string;
   templateId: string;
+  resumeId: string | null;
   audienceContactIds: string[];
   status: CampaignStatus;
   scheduledAt: string | null;
