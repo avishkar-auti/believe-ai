@@ -1,28 +1,27 @@
-import { useRef, useState, type FormEvent } from "react";
+import { useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AnimatePresence, motion } from "framer-motion";
 import { Copy, FileText, Pencil, PenLine, Plus, Sparkles, Trash2 } from "lucide-react";
-import { CONTACT_TEMPLATE_VARIABLES, SENDER_TEMPLATE_VARIABLES, TEMPLATE_VARIABLE_LABELS, type Template, type TemplateVariable } from "@believe-ai/shared";
+import type { Template } from "@believe-ai/shared";
 import { Button } from "../../components/ui/Button.js";
 import { Input } from "../../components/ui/Input.js";
-import { Textarea } from "../../components/ui/Textarea.js";
 import { Card, CardBody } from "../../components/ui/Card.js";
 import { PageHeader } from "../../components/ui/PageHeader.js";
 import { Spinner } from "../../components/ui/Spinner.js";
 import { MOTION } from "../../lib/motion.js";
 import { createTemplate, deleteTemplate, duplicateTemplate, fetchTemplates, updateTemplate } from "./templatesApi.js";
 import { TemplateChat } from "./TemplateChat.js";
+import { EmailBodyEditor } from "./EmailBodyEditor.js";
 
 type PanelMode = "closed" | "manual" | "chat";
 
-const SIGNATURE_BLOCK = "Best regards,\n{{senderName}}\n{{linkedin}} | {{github}}";
+const SIGNATURE_HTML = "<p>Best regards,<br>{{senderName}}<br>{{linkedin}} | {{github}}</p>";
 
 export function TemplatesPage() {
   const queryClient = useQueryClient();
   const [panel, setPanel] = useState<PanelMode>("closed");
   const [form, setForm] = useState({ name: "", subject: "", body: "" });
   const [editingId, setEditingId] = useState<string | null>(null);
-  const bodyRef = useRef<HTMLTextAreaElement>(null);
 
   function openCreate() {
     setForm({ name: "", subject: "", body: "" });
@@ -31,7 +30,7 @@ export function TemplatesPage() {
   }
 
   function openEdit(t: Template) {
-    setForm({ name: t.name, subject: t.subject, body: t.body });
+    setForm({ name: t.name, subject: t.subject, body: t.bodyHtml });
     setEditingId(t.id);
     setPanel("manual");
   }
@@ -41,31 +40,14 @@ export function TemplatesPage() {
     setEditingId(null);
   }
 
-  function insertIntoBody(token: string) {
-    const textarea = bodyRef.current;
-    if (!textarea) {
-      setForm((f) => ({ ...f, body: f.body + token }));
-      return;
-    }
-    const start = textarea.selectionStart ?? textarea.value.length;
-    const end = textarea.selectionEnd ?? textarea.value.length;
-    const nextBody = form.body.slice(0, start) + token + form.body.slice(end);
-    setForm((f) => ({ ...f, body: nextBody }));
-    requestAnimationFrame(() => {
-      textarea.focus();
-      const cursor = start + token.length;
-      textarea.setSelectionRange(cursor, cursor);
-    });
-  }
-
   function appendSignature() {
-    setForm((f) => ({ ...f, body: f.body.replace(/\s+$/, "") + "\n\n" + SIGNATURE_BLOCK }));
+    setForm((f) => ({ ...f, body: f.body + SIGNATURE_HTML }));
   }
 
   const { data, isLoading } = useQuery({ queryKey: ["templates"], queryFn: fetchTemplates });
 
   const createMutation = useMutation({
-    mutationFn: createTemplate,
+    mutationFn: () => createTemplate({ name: form.name, subject: form.subject, body: form.body, bodyFormat: "html" }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["templates"] });
       setForm({ name: "", subject: "", body: "" });
@@ -74,7 +56,7 @@ export function TemplatesPage() {
   });
 
   const updateMutation = useMutation({
-    mutationFn: (vars: { id: string; input: typeof form }) => updateTemplate(vars.id, vars.input),
+    mutationFn: (id: string) => updateTemplate(id, { name: form.name, subject: form.subject, body: form.body, bodyFormat: "html" }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["templates"] });
       closePanel();
@@ -94,9 +76,9 @@ export function TemplatesPage() {
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
     if (editingId) {
-      updateMutation.mutate({ id: editingId, input: form });
+      updateMutation.mutate(editingId);
     } else {
-      createMutation.mutate(form);
+      createMutation.mutate();
     }
   }
 
@@ -136,7 +118,7 @@ export function TemplatesPage() {
             className="overflow-hidden"
           >
             <Card>
-              <CardBody>
+              <CardBody className="space-y-3">
                 <form className="space-y-3" onSubmit={handleSubmit}>
                   <p className="text-sm font-medium text-fg">{editingId ? "Edit template" : "New template"}</p>
                   <Input
@@ -151,37 +133,18 @@ export function TemplatesPage() {
                     value={form.subject}
                     onChange={(e) => setForm((f) => ({ ...f, subject: e.target.value }))}
                   />
-                  <div className="space-y-1.5">
-                    <div className="flex flex-wrap items-center gap-1.5">
-                      <span className="text-caption text-fg-subtle">Recipient:</span>
-                      {CONTACT_TEMPLATE_VARIABLES.map((v) => (
-                        <VariableChip key={v} variable={v} onClick={() => insertIntoBody(`{{${v}}}`)} />
-                      ))}
-                    </div>
-                    <div className="flex flex-wrap items-center gap-1.5">
-                      <span className="text-caption text-fg-subtle">You:</span>
-                      {SENDER_TEMPLATE_VARIABLES.map((v) => (
-                        <VariableChip key={v} variable={v} onClick={() => insertIntoBody(`{{${v}}}`)} />
-                      ))}
-                      <button
-                        type="button"
-                        onClick={appendSignature}
-                        className="inline-flex items-center gap-1 rounded-pill border border-dashed border-line-strong px-2.5 py-1 text-xs font-medium text-fg-muted hover:border-accent hover:text-accent"
-                      >
-                        <PenLine className="h-3 w-3" /> Add sign-off
-                      </button>
-                    </div>
+                  <div className="flex items-center justify-end">
+                    <button
+                      type="button"
+                      onClick={appendSignature}
+                      className="inline-flex items-center gap-1 rounded-pill border border-dashed border-line-strong px-2.5 py-1 text-xs font-medium text-fg-muted hover:border-accent hover:text-accent"
+                    >
+                      <PenLine className="h-3 w-3" /> Add sign-off
+                    </button>
                   </div>
-                  <Textarea
-                    ref={bodyRef}
-                    placeholder="Body — click a variable above, or type {{firstName}} etc. by hand"
-                    required
-                    rows={8}
-                    value={form.body}
-                    onChange={(e) => setForm((f) => ({ ...f, body: e.target.value }))}
-                  />
+                  <EmailBodyEditor subject={form.subject} value={form.body} onChange={(body) => setForm((f) => ({ ...f, body }))} />
                   <div className="flex items-center gap-2">
-                    <Button type="submit" disabled={isSaving}>
+                    <Button type="submit" disabled={isSaving || !form.body.trim()}>
                       {isSaving ? "Saving…" : editingId ? "Save changes" : "Save template"}
                     </Button>
                     {editingId && (
@@ -248,7 +211,7 @@ export function TemplatesPage() {
                   </span>
                   <h3 className="mt-3 font-medium text-fg">{t.name}</h3>
                   <p className="mt-1 text-sm font-medium text-fg-muted">{t.subject}</p>
-                  <p className="mt-1 line-clamp-3 text-sm text-fg-subtle">{t.body}</p>
+                  <p className="mt-1 line-clamp-3 whitespace-pre-line text-sm text-fg-subtle">{t.bodyText}</p>
                   <div className="mt-3 flex gap-2">
                     <Button variant="ghost" size="sm" onClick={() => openEdit(t)}>
                       <Pencil className="h-4 w-4" /> Edit
@@ -267,20 +230,5 @@ export function TemplatesPage() {
         </div>
       )}
     </div>
-  );
-}
-
-/** One click-to-insert {{variable}} pill — avoids anyone hand-typing the
- * syntax (and getting the casing wrong, which silently renders as blank). */
-function VariableChip({ variable, onClick }: { variable: TemplateVariable; onClick: () => void }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      title={TEMPLATE_VARIABLE_LABELS[variable]}
-      className="rounded-pill bg-surface-2 px-2.5 py-1 font-mono text-xs font-medium text-fg-muted hover:bg-accent-soft hover:text-accent"
-    >
-      {"{{" + variable + "}}"}
-    </button>
   );
 }

@@ -28,11 +28,12 @@ from email_providers.base import EmailAttachment, SendEmailInput
 from models.campaign import Campaign
 from models.contact import Contact
 from models.email_log import EmailLog
-from models.template import Template
+from models.template import Template, TemplateBodyFormat
 from models.user import User
 from repositories import email_log_repository, resume_repository, unsubscribe_repository, user_context_repository
 from schemas.ai import AiPersonalizeRequest, ContactPersonalizationInput
 from services import notification_service
+from services.email_content import interpolate_html, normalize_legacy_text_to_html, to_html, to_plain_text
 from services.email_provider_resolver import resolve_provider
 from services.template_service import interpolate
 from utils.user_context import format_user_context_for_prompt
@@ -70,21 +71,6 @@ def _split_signature(body: str) -> tuple[str, str]:
     if not match:
         return body, ""
     return body[: match.start()], body[match.start() :]
-
-
-def _plain_text_to_html(text: str) -> str:
-    """Every template body — and the AI's personalized rewrite of one — is
-    plain text with blank-line-separated paragraphs (see prompts/email.py's
-    schema and TemplatesPage.tsx's plain <Textarea>), not HTML. Dropped
-    straight into an email's HTML part, literal newlines collapse per normal
-    HTML whitespace rules and the whole message reads as one run-on
-    paragraph. This is the one place that turns real paragraph/line breaks
-    back into <p>/<br> so the sent email actually looks like the plain text
-    it was authored as. The {{linkedin}}/{{github}} values are already real
-    `<a href>` fragments by the time they're interpolated in (see the values
-    dict above) — safe to leave untouched here."""
-    paragraphs = re.split(r"\n\s*\n", text.strip())
-    return "".join(f"<p>{p.replace(chr(10), '<br>')}</p>" for p in paragraphs if p.strip())
 
 
 async def _maybe_complete_campaign(campaign_id: PydanticObjectId) -> None:
@@ -157,28 +143,46 @@ async def _schedule_next_step(email_log: EmailLog, campaign: Campaign) -> None:
     await pool.enqueue_job("send_campaign_email", str(next_log.id), _job_id=str(next_log.id), _defer_by=delay_ms / 1000)
 
 
+_RAW_INTERPOLATE_KEYS = frozenset({"linkedin", "github"})
+
+
 async def _build_personalized_content(
     *,
     personalization_enabled: bool,
     user_id: PydanticObjectId,
     subject_source: str,
     template_body: str,
+    body_format: TemplateBodyFormat,
     contact: Contact,
     values: dict[str, str | None],
 ) -> tuple[str, str]:
     """Personalizes via the AI provider when the campaign has it enabled,
     falling back to plain {{variable}} interpolation if personalization is
-    off or the AI call fails — a provider hiccup should never block a send."""
-    # interpolate() leaves an unrecognized placeholder blank, not a None value —
-    # drop empty variables so a missing company/jobTitle renders as "" too.
+    off or the AI call fails — a provider hiccup should never block a send.
+
+    Returns (subject, body_html) — body is always final, rendered, merge-
+    variable-resolved HTML, regardless of which path produced it or what
+    format the template was stored in. Real HTML is never handed to the AI
+    provider for rewriting: personalization always operates on a plain-text
+    view of the body (to_plain_text() first, for an HTML-format template),
+    and the result is re-rendered to HTML afterward via the same
+    normalize_legacy_text_to_html() used for every other plain-text body —
+    the one path that can't corrupt markup, since the model never sees any."""
+    # interpolate()/interpolate_html() leave an unrecognized placeholder blank,
+    # not a None value — drop empty variables so a missing company/jobTitle
+    # renders as "" too.
     present_values = {k: v for k, v in values.items() if v is not None}
-    fallback = (interpolate(subject_source, present_values), interpolate(template_body, present_values))
+    subject = interpolate(subject_source, present_values)
+
+    def render_fallback() -> str:
+        rendered_html = to_html(template_body, body_format)
+        return interpolate_html(rendered_html, present_values, raw_keys=_RAW_INTERPOLATE_KEYS)
 
     if not personalization_enabled:
-        return fallback
+        return subject, render_fallback()
 
-    content, signature = _split_signature(template_body)
-    signature_html = interpolate(signature, present_values) if signature else ""
+    plain_body = template_body if body_format == "text" else to_plain_text(template_body)
+    content, signature = _split_signature(plain_body)
 
     try:
         profile = await user_context_repository.find_by_user_id(user_id)
@@ -211,10 +215,20 @@ async def _build_personalized_content(
                 senderContext=sender_context,
             ),
         )
-        return result.subject, result.body + signature_html
+        # Signature is appended (still holding raw {{tokens}}, not yet
+        # interpolated) before normalizing to HTML, and interpolated only
+        # after — interpolating first would inject the {{linkedin}}/
+        # {{github}} anchor tags as raw text into what normalize treats as
+        # plain input, HTML-escaping them into visible markup instead of a
+        # real link.
+        combined_plain = f"{result.body}\n\n{signature}" if signature else result.body
+        rendered_html = normalize_legacy_text_to_html(combined_plain)
+        return interpolate(result.subject, present_values), interpolate_html(
+            rendered_html, present_values, raw_keys=_RAW_INTERPOLATE_KEYS
+        )
     except Exception as err:  # noqa: BLE001 — AI assists, never blocks the core send workflow
         logger.warning("AI personalization failed for user %s, falling back to template interpolation: %s", user_id, err)
-        return fallback
+        return subject, render_fallback()
 
 
 async def _send(email_log_id: str) -> None:
@@ -280,11 +294,12 @@ async def _send(email_log_id: str) -> None:
     }
 
     subject_source = (campaign.subject or template.subject) if log.stepIndex == 0 else (subject_override or template.subject)
-    subject, body_text = await _build_personalized_content(
+    subject, body_html = await _build_personalized_content(
         personalization_enabled=campaign.personalizationEnabled,
         user_id=log.userId,
         subject_source=subject_source,
         template_body=template.body,
+        body_format=template.bodyFormat,
         contact=contact,
         values=values,
     )
@@ -297,12 +312,6 @@ async def _send(email_log_id: str) -> None:
     )
     unsubscribe_url = f"{api_base_url}/t/unsubscribe/{log.trackingToken}"
 
-    # The plain-text alternative keeps the original links — a text-only client
-    # can't be click-tracked anyway, and bare redirect URLs read as suspicious.
-    text = f"{re.sub('<[^>]+>', '', body_text)}\n\nUnsubscribe: {unsubscribe_url}"
-
-    body_html = _plain_text_to_html(body_text)
-
     # Route the body's links through the click-tracking endpoint. The unsubscribe
     # link is deliberately excluded — opting out must never look like engagement,
     # and it has to keep working even if tracking is off.
@@ -312,6 +321,13 @@ async def _send(email_log_id: str) -> None:
         if campaign.trackingEnabled
         else body_html
     )
+
+    # Real HTML -> text conversion (paragraph/list-aware, see
+    # services/email_content.py) rather than a naive tag-strip — the
+    # plain-text alternative keeps the original links since a text-only
+    # client can't be click-tracked anyway and a bare redirect URL reads as
+    # suspicious.
+    text = f"{to_plain_text(body_html)}\n\nUnsubscribe: {unsubscribe_url}"
 
     html = (
         f'{tracked_body_html}{tracking_pixel}<p style="font-size:12px;color:#888;margin-top:24px">'

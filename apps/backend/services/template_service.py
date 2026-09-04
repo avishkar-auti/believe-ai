@@ -7,42 +7,37 @@ from __future__ import annotations
 import re
 from typing import Any
 
-import nh3
 from bson import ObjectId
 
 from core.errors import NotFoundError
-from models.template import Template
+from models.template import Template, TemplateBodyFormat
 from repositories import template_repository
 from schemas.template import CreateTemplateInput, TemplateDto, UpdateTemplateInput
+from services.email_content import interpolate_html, to_html, to_plain_text
 
-_ALLOWED_TAGS = {"p", "br", "b", "strong", "i", "em", "u", "a", "ul", "ol", "li", "span", "div"}
-# "rel" is deliberately absent here — nh3 auto-adds rel="noopener noreferrer"
-# to every <a> itself (its link_rel param, on by default). Also listing "rel"
-# in the allowlist hits an nh3/ammonia panic: "if rel is in the generic or
-# tag attributes, link_rel must be set to None" (nh3.clean's own docstring) —
-# this was silently 500-ing every template save that reached sanitization.
-_ALLOWED_ATTRIBUTES = {"a": {"href", "target"}}
 _INTERPOLATE_PATTERN = re.compile(r"{{\s*(\w+)\s*}}")
 
 
 def _to_dto(doc: Template) -> TemplateDto:
+    rendered_html = to_html(doc.body, doc.bodyFormat)
     return TemplateDto(
         id=str(doc.id),
         userId=str(doc.userId),
         name=doc.name,
         subject=doc.subject,
         body=doc.body,
+        bodyFormat=doc.bodyFormat,
+        bodyHtml=rendered_html,
+        bodyText=to_plain_text(rendered_html),
         createdAt=doc.createdAt.isoformat(),
         updatedAt=doc.updatedAt.isoformat(),
     )
 
 
-def _sanitize_body(body: str) -> str:
-    return nh3.clean(body, tags=_ALLOWED_TAGS, attributes=_ALLOWED_ATTRIBUTES)
-
-
 def interpolate(text: str, values: dict[str, str]) -> str:
-    """Unknown or missing variables are left blank rather than raising —
+    """Plain (non-HTML-escaping) {{variable}} substitution — used for the
+    subject line, which is never HTML, and as the legacy text-body path.
+    Unknown or missing variables are left blank rather than raising —
     templates must still render for contacts with partial data."""
     return _INTERPOLATE_PATTERN.sub(lambda m: values.get(m.group(1), ""), text)
 
@@ -60,14 +55,20 @@ async def get_by_id(template_id: ObjectId, user_id: ObjectId) -> TemplateDto:
 
 
 async def create(user_id: ObjectId, input_: CreateTemplateInput) -> TemplateDto:
-    doc = await template_repository.create(user_id, name=input_.name, subject=input_.subject, body=_sanitize_body(input_.body))
+    body = to_html(input_.body, input_.bodyFormat) if input_.bodyFormat == "html" else input_.body
+    doc = await template_repository.create(user_id, name=input_.name, subject=input_.subject, body=body, body_format=input_.bodyFormat)
     return _to_dto(doc)
 
 
 async def update(template_id: ObjectId, user_id: ObjectId, input_: UpdateTemplateInput) -> TemplateDto:
     updates: dict[str, Any] = input_.model_dump(exclude_unset=True)
-    if updates.get("body"):
-        updates["body"] = _sanitize_body(updates["body"])
+    if updates.get("body") is not None:
+        existing = await template_repository.find_by_id(template_id, user_id)
+        if not existing:
+            raise NotFoundError("Template not found")
+        body_format = updates.get("bodyFormat", existing.bodyFormat)
+        if body_format == "html":
+            updates["body"] = to_html(updates["body"], "html")
     doc = await template_repository.update(template_id, user_id, updates)
     if not doc:
         raise NotFoundError("Template not found")
@@ -84,9 +85,17 @@ async def duplicate(template_id: ObjectId, user_id: ObjectId) -> TemplateDto:
     original = await template_repository.find_by_id(template_id, user_id)
     if not original:
         raise NotFoundError("Template not found")
-    copy = await template_repository.create(user_id, name=f"{original.name} (copy)", subject=original.subject, body=original.body)
+    copy = await template_repository.create(
+        user_id, name=f"{original.name} (copy)", subject=original.subject, body=original.body, body_format=original.bodyFormat
+    )
     return _to_dto(copy)
 
 
-def preview(subject: str, body: str, values: dict[str, str]) -> tuple[str, str]:
-    return interpolate(subject, values), interpolate(body, values)
+def preview(subject: str, body: str, body_format: TemplateBodyFormat, values: dict[str, str]) -> tuple[str, str]:
+    """Renders exactly what the real send pipeline renders — the composer's
+    Preview mode and the campaign recipient preview both call this, so
+    neither can show something different from what actually gets sent (see
+    services/email_content.py's module docstring for why that mismatch used
+    to be the whole bug)."""
+    rendered_html = to_html(body, body_format)
+    return interpolate(subject, values), interpolate_html(rendered_html, values)

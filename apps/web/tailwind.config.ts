@@ -1,3 +1,4 @@
+import typography from "@tailwindcss/typography";
 import type { Config } from "tailwindcss";
 
 /**
@@ -145,5 +146,9 @@ export default {
       },
     },
   },
-  plugins: [],
+  // The `prose`/`prose-sm`/`dark:prose-invert` classes are already used
+  // throughout the app (NoteEditor.tsx, and now EmailBodyEditor/EmailPreview)
+  // expecting this plugin's styling — it just wasn't installed yet, so lists/
+  // headings/blockquotes rendered with no visible markers at all.
+  plugins: [typography],
 } satisfies Config;

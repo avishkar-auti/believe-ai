@@ -1,10 +1,18 @@
 /**
  * Reusable email template with {{variable}} placeholders.
  */
+// "text" (default) is the legacy/plain format, normalized into real HTML
+// (paragraphs, lists, bold, links) at render time. "html" is real HTML
+// authored through the Write/HTML composer (EmailBodyEditor) — every
+// template saved through the editor is this format; every template that
+// predates it reads back as "text" with no migration needed.
+export type TemplateBodyFormat = "text" | "html";
+
 export interface CreateTemplateInput {
   name: string;
   subject: string;
   body: string;
+  bodyFormat?: TemplateBodyFormat;
 }
 
 export type UpdateTemplateInput = Partial<CreateTemplateInput>;
@@ -12,11 +20,14 @@ export type UpdateTemplateInput = Partial<CreateTemplateInput>;
 export interface TemplatePreviewInput {
   subject: string;
   body: string;
+  bodyFormat?: TemplateBodyFormat;
   values: TemplateVariableValues;
 }
 
 export interface TemplatePreviewResult {
   subject: string;
+  /** Always real, rendered HTML — safe to render directly regardless of
+   * the source template's bodyFormat. */
   body: string;
 }
 
@@ -26,6 +37,10 @@ export interface Template {
   name: string;
   subject: string;
   body: string;
+  bodyFormat: TemplateBodyFormat;
+  /** Always-rendered representations of `body` — see TemplatePreviewResult. */
+  bodyHtml: string;
+  bodyText: string;
   createdAt: string;
   updatedAt: string;
 }

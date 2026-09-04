@@ -3,11 +3,11 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { ArrowUp, Save, Sparkles, X } from "lucide-react";
 import { Button } from "../../components/ui/Button.js";
 import { Input } from "../../components/ui/Input.js";
-import { Textarea } from "../../components/ui/Textarea.js";
 import { Card, CardBody } from "../../components/ui/Card.js";
 import { Spinner } from "../../components/ui/Spinner.js";
-import { createTemplate } from "./templatesApi.js";
+import { createTemplate, previewTemplate } from "./templatesApi.js";
 import { chatAboutTemplate, type TemplateChatMessage } from "./templateChatApi.js";
+import { EmailBodyEditor } from "./EmailBodyEditor.js";
 
 const SUGGESTED_PROMPTS = [
   "Write a cold outreach template asking a recruiter about open roles",
@@ -31,16 +31,24 @@ export function TemplateChat({ onClose }: TemplateChatProps) {
   const chatMutation = useMutation({
     mutationFn: ({ text, history }: { text: string; history: TemplateChatMessage[] }) =>
       chatAboutTemplate(text, history, draft?.subject ?? null, draft?.body ?? null),
-    onSuccess: (data) => {
+    onSuccess: async (data) => {
       setMessages((prev) => [...prev, { role: "assistant", content: data.reply }]);
-      if (data.subject.trim() || data.body.trim()) setDraft({ subject: data.subject, body: data.body });
+      if (data.subject.trim() || data.body.trim()) {
+        // The AI drafts in plain text (prompts/template_chat.py) — render it
+        // through the same pipeline a real send uses so the live draft shows
+        // real paragraphs/lists immediately, not raw {{blank-line}} text.
+        const rendered = data.body.trim()
+          ? await previewTemplate({ subject: data.subject, body: data.body, bodyFormat: "text", values: {} })
+          : null;
+        setDraft({ subject: data.subject, body: rendered?.body ?? data.body });
+      }
       setChatError(null);
     },
     onError: () => setChatError("Couldn't reach the assistant — try again in a moment."),
   });
 
   const saveMutation = useMutation({
-    mutationFn: () => createTemplate({ name: templateName, subject: draft!.subject, body: draft!.body }),
+    mutationFn: () => createTemplate({ name: templateName, subject: draft!.subject, body: draft!.body, bodyFormat: "html" }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["templates"] });
       setSavedMessage("Saved as a template — believe it!");
@@ -151,7 +159,12 @@ export function TemplateChat({ onClose }: TemplateChatProps) {
             <>
               <p className="text-xs font-semibold uppercase tracking-wider text-fg-subtle">Live draft</p>
               <Input value={draft.subject} onChange={(e) => setDraft((d) => (d ? { ...d, subject: e.target.value } : d))} />
-              <Textarea rows={8} value={draft.body} onChange={(e) => setDraft((d) => (d ? { ...d, body: e.target.value } : d))} />
+              <EmailBodyEditor
+                subject={draft.subject}
+                value={draft.body}
+                onChange={(body) => setDraft((d) => (d ? { ...d, body } : d))}
+                minHeight={180}
+              />
               <div className="flex gap-2 pt-1">
                 <Input placeholder="Template name" value={templateName} onChange={(e) => setTemplateName(e.target.value)} />
                 <Button onClick={() => saveMutation.mutate()} disabled={!templateName || saveMutation.isPending}>

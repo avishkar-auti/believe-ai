@@ -7,7 +7,7 @@ from typing import Any
 
 from bson import ObjectId
 
-from models.template import Template
+from models.template import Template, TemplateBodyFormat
 
 
 async def list_for_user(user_id: ObjectId) -> list[Template]:
@@ -18,8 +18,8 @@ async def find_by_id(template_id: ObjectId, user_id: ObjectId) -> Template | Non
     return await Template.find_one(Template.id == template_id, Template.userId == user_id)
 
 
-async def create(user_id: ObjectId, *, name: str, subject: str, body: str) -> Template:
-    doc = Template(userId=user_id, name=name, subject=subject, body=body)
+async def create(user_id: ObjectId, *, name: str, subject: str, body: str, body_format: TemplateBodyFormat = "text") -> Template:
+    doc = Template(userId=user_id, name=name, subject=subject, body=body, bodyFormat=body_format)
     await doc.insert()
     return doc
 

@@ -34,7 +34,7 @@ async def create_template_route(body: CreateTemplateInput, mongo_user_id: MongoU
 
 @router.post("/preview", response_model=TemplatePreviewResult)
 async def preview_template_route(body: TemplatePreviewInput, _user_id: UserIdDep) -> TemplatePreviewResult:
-    subject, preview_body = template_service.preview(body.subject, body.body, body.values)
+    subject, preview_body = template_service.preview(body.subject, body.body, body.bodyFormat, body.values)
     return TemplatePreviewResult(subject=subject, body=preview_body)
 
 

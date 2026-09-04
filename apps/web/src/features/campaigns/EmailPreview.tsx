@@ -33,7 +33,17 @@ export function EmailPreview({
             <span className="font-medium text-fg">{loading ? "…" : subject || "(no subject)"}</span>
           </div>
         </div>
-        <div className="whitespace-pre-wrap px-4 py-4 text-label leading-relaxed text-fg">{loading ? "Loading preview…" : body}</div>
+        {loading ? (
+          <div className="px-4 py-4 text-label leading-relaxed text-fg">Loading preview…</div>
+        ) : (
+          <div
+            className="prose prose-sm dark:prose-invert max-w-none px-4 py-4 leading-relaxed"
+            // Safe: `body` here is always real HTML rendered server-side by
+            // services/email_content.py's shared pipeline — the exact same
+            // renderer the real outbound send uses, never raw unreviewed input.
+            dangerouslySetInnerHTML={{ __html: body }}
+          />
+        )}
       </div>
 
       {!loading &&

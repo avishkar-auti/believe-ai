@@ -54,6 +54,7 @@ export function CampaignContentStep({
       previewTemplate({
         subject: subject.trim() || selectedTemplate!.subject,
         body: selectedTemplate!.body,
+        bodyFormat: selectedTemplate!.bodyFormat,
         values,
       }),
     enabled: Boolean(selectedTemplate && recipient),
