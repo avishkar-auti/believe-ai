@@ -14,7 +14,15 @@ async def _detect_skills(state: NewsSearchState) -> list[str] | None:
     """Resume mode only — agent-to-agent call into Career Fit's own
     skill-extraction subroutine (agents/career_fit_agent.py) rather than
     News maintaining a second, duplicate resume-skills prompt. Best-effort:
-    relevance reasoning still works from queryText alone if this fails."""
+    relevance reasoning still works from queryText alone if this fails.
+
+    resolve_query_node already runs this same extraction to build the actual
+    search query, so the normal path just reuses that result here rather
+    than paying for an identical second LLM call — this only re-extracts as
+    a fallback if state["skills"] was never set (e.g. resolve_query's own
+    attempt failed)."""
+    if state.get("mode") == "resume" and "skills" in state:
+        return state.get("skills")
     resume_text = state.get("resume_text")
     if state.get("mode") != "resume" or not resume_text:
         return None

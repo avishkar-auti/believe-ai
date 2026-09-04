@@ -22,6 +22,7 @@ class NewsSearchState(BaseAgentState, total=False):
     raw_query: str  # sent to the news source as a keyword search
     query_text: str  # the (usually richer) text that actually gets embedded
     resume_text: str  # resume mode only — reused by generate_relevance for skill-grounded reasoning
+    skills: list[str] | None  # resume mode only — extracted once in resolve_query, reused by generate_relevance
 
     candidate_articles: list[dict[str, Any]]
     scored_candidates: list[dict[str, Any]]
