@@ -1,12 +1,10 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { Mic, MicOff, PhoneOff, Video, VideoOff } from "lucide-react";
 import type { RoomIdea } from "@believe-ai/shared";
-import { Button } from "../../components/ui/Button.js";
-import { Card } from "../../components/ui/Card.js";
+import { ConfirmDialog } from "../../components/ui/ConfirmDialog.js";
 import { Spinner } from "../../components/ui/Spinner.js";
-import { cn } from "../../lib/cn.js";
+import { toast } from "../../components/ui/Toast.js";
 import { firebaseAuth } from "../../lib/firebase.js";
 import { useCurrentUser } from "../../hooks/useCurrentUser.js";
 import {
@@ -22,11 +20,19 @@ import {
   submitRoomFeedback,
   type IceServer,
 } from "./interviewRoomApi.js";
-import { FeedbackDrawer } from "./FeedbackDrawer.js";
-import { IdeaBoard } from "./IdeaBoard.js";
-import { QuestionPanel } from "./QuestionPanel.js";
-import { RecapTab } from "./RecapTab.js";
-import { RoomRoster, type RosterEntry } from "./RoomRoster.js";
+import { RoomHeader } from "./room/RoomHeader.js";
+import { ParticipantStage, type StageParticipant } from "./room/ParticipantStage.js";
+import { MeetingControls } from "./room/MeetingControls.js";
+import { RoomSidePanel } from "./room/RoomSidePanel.js";
+import { usePanelState } from "./room/usePanelState.js";
+import { QuestionsPanel } from "./room/QuestionsPanel.js";
+import { IdeaBoardPanel } from "./room/IdeaBoardPanel.js";
+import { PeoplePanel, type PersonEntry } from "./room/PeoplePanel.js";
+import { RecapPanel } from "./room/RecapPanel.js";
+import { FeedbackPanel } from "./room/FeedbackPanel.js";
+import { PreJoinScreen, type JoinPreferences } from "./room/PreJoinScreen.js";
+import { ConnectingState, EndedState, ErrorState, WaitingState } from "./room/RoomStates.js";
+import { useSpeakingDetection } from "./room/useSpeakingDetection.js";
 
 interface FeedbackPrompt {
   questionId: string;
@@ -75,9 +81,18 @@ interface QuestionRef {
 }
 
 /** video+audio -> audio-only -> video-only -> no media — a missing camera or
- * mic should never block joining the call entirely. */
-async function acquireLocalMedia(): Promise<MediaStream | null> {
+ * mic should never block joining the call entirely. The pre-join screen's
+ * chosen devices are tried first, then the same generic fallbacks. */
+async function acquireLocalMedia(prefs: JoinPreferences | null): Promise<MediaStream | null> {
+  const audio: MediaTrackConstraints | boolean = prefs?.audioDeviceId
+    ? { deviceId: { exact: prefs.audioDeviceId } }
+    : true;
+  const video: MediaTrackConstraints | boolean = prefs?.videoDeviceId
+    ? { deviceId: { exact: prefs.videoDeviceId } }
+    : true;
+
   const attempts: MediaStreamConstraints[] = [
+    { video, audio },
     { video: true, audio: true },
     { video: false, audio: true },
     { video: true, audio: false },
@@ -92,12 +107,6 @@ async function acquireLocalMedia(): Promise<MediaStream | null> {
   return null;
 }
 
-function gridColsClass(tileCount: number): string {
-  if (tileCount <= 2) return "sm:grid-cols-2";
-  if (tileCount <= 4) return "sm:grid-cols-2";
-  return "sm:grid-cols-3";
-}
-
 export function RoomCallPage() {
   const { code = "" } = useParams<{ code: string }>();
   const navigate = useNavigate();
@@ -107,6 +116,17 @@ export function RoomCallPage() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [muted, setMuted] = useState(false);
   const [videoOff, setVideoOff] = useState(false);
+
+  // Pre-join gate: the signalling/media effect below only runs once the user
+  // has confirmed their devices, so nothing is captured before they ask.
+  const [joinPrefs, setJoinPrefs] = useState<JoinPreferences | null>(null);
+  const joined = joinPrefs !== null;
+
+  const [localStream, setLocalStream] = useState<MediaStream | null>(null);
+  const [screenStream, setScreenStream] = useState<MediaStream | null>(null);
+  const [leaveOpen, setLeaveOpen] = useState(false);
+  const [endOpen, setEndOpen] = useState(false);
+  const [startedAt, setStartedAt] = useState<number | null>(null);
 
   const [participants, setParticipants] = useState<Map<string, string>>(new Map());
   const [remoteStreams, setRemoteStreams] = useState<Map<string, MediaStream>>(new Map());
@@ -119,7 +139,6 @@ export function RoomCallPage() {
   const [averageRatings, setAverageRatings] = useState<Map<string, number>>(new Map());
   const [feedbackPrompt, setFeedbackPrompt] = useState<FeedbackPrompt | null>(null);
 
-  const localVideoRef = useRef<HTMLVideoElement>(null);
   const wsRef = useRef<WebSocket | null>(null);
   const pcRef = useRef<Map<string, RTCPeerConnection>>(new Map());
   const localStreamRef = useRef<MediaStream | null>(null);
@@ -139,6 +158,8 @@ export function RoomCallPage() {
   const isHost = Boolean(currentUser && hostUserId && currentUser.id === hostUserId);
   const currentQuestion = questions[currentQuestionIndex] ?? null;
 
+  const panel = usePanelState("questions");
+
   useEffect(() => {
     currentQuestionIndexRef.current = currentQuestionIndex;
   }, [currentQuestionIndex]);
@@ -151,6 +172,10 @@ export function RoomCallPage() {
   useEffect(() => {
     currentUserIdRef.current = currentUser?.id ?? null;
   }, [currentUser]);
+
+  useEffect(() => {
+    if (status === "active") setStartedAt((prev) => prev ?? Date.now());
+  }, [status]);
 
   // Browser-side speech-to-text during the local user's own turn — batches
   // ~12s of finalized speech and posts it as one transcript chunk (feeds the
@@ -207,8 +232,10 @@ export function RoomCallPage() {
   }, [status, currentSpeakerUserId, currentUser, code]);
 
   useEffect(() => {
+    if (!joined) return; // pre-join gate — no capture or socket until the user joins
     if (!iceServers) return; // wait for ICE config before opening the signaling connection
     const servers = iceServers;
+    const prefs = joinPrefs;
     let cancelled = false;
 
     async function connect() {
@@ -220,10 +247,21 @@ export function RoomCallPage() {
       }
       const token = await user.getIdToken();
 
-      const localStream = await acquireLocalMedia();
-      if (cancelled) return;
+      const localStream = await acquireLocalMedia(prefs);
+      if (cancelled) {
+        localStream?.getTracks().forEach((t) => t.stop());
+        return;
+      }
       localStreamRef.current = localStream;
-      if (localStream && localVideoRef.current) localVideoRef.current.srcObject = localStream;
+      setLocalStream(localStream);
+
+      // Honour the pre-join mic/camera choices on the real call tracks.
+      if (localStream && prefs) {
+        localStream.getAudioTracks().forEach((t) => (t.enabled = prefs.micOn));
+        localStream.getVideoTracks().forEach((t) => (t.enabled = prefs.cameraOn));
+        setMuted(!prefs.micOn);
+        setVideoOff(!prefs.cameraOn);
+      }
 
       const ws = new WebSocket(`${getSignalingWsUrl()}?token=${encodeURIComponent(token)}&code=${encodeURIComponent(code)}`);
       wsRef.current = ws;
@@ -436,7 +474,7 @@ export function RoomCallPage() {
       peerConnections.clear();
       localStreamRef.current?.getTracks().forEach((t) => t.stop());
     };
-  }, [code, iceServers, navigate]);
+  }, [code, iceServers, navigate, joined, joinPrefs]);
 
   // Hydrates the full session's notes once on mount/reconnect — separate from
   // the WS lifecycle above, since a late joiner or a refresh needs to see
@@ -470,7 +508,10 @@ export function RoomCallPage() {
     // Dismissing the drawer is local-only UI state (not shared with other
     // tabs), so it's applied directly here rather than round-tripping
     // through a WS broadcast the way the roster badge value does.
-    onSuccess: () => setFeedbackPrompt(null),
+    onSuccess: () => {
+      setFeedbackPrompt(null);
+      toast("Feedback sent");
+    },
   });
 
   function advanceTurn() {
@@ -491,6 +532,7 @@ export function RoomCallPage() {
     // room-ended WS broadcast, not this mutation's own response — same
     // one-update-path pattern as regenerateMutation.
     mutationFn: () => endRoom(code),
+    onSettled: () => setEndOpen(false),
   });
 
   function toggleMute() {
@@ -507,122 +549,277 @@ export function RoomCallPage() {
     setVideoOff(!track.enabled);
   }
 
+  /** Replaces the outgoing video track on every peer connection so peers see
+   * the screen instead of the camera, then restores the camera on stop. */
+  async function toggleShare() {
+    if (screenStream) {
+      screenStream.getTracks().forEach((t) => t.stop());
+      setScreenStream(null);
+      const cameraTrack = localStreamRef.current?.getVideoTracks()[0] ?? null;
+      for (const pc of pcRef.current.values()) {
+        const sender = pc.getSenders().find((s) => s.track?.kind === "video");
+        if (sender) await sender.replaceTrack(cameraTrack).catch(() => undefined);
+      }
+      return;
+    }
+
+    try {
+      const display = await navigator.mediaDevices.getDisplayMedia({ video: true });
+      const screenTrack = display.getVideoTracks()[0];
+      if (!screenTrack) return;
+      setScreenStream(display);
+      for (const pc of pcRef.current.values()) {
+        const sender = pc.getSenders().find((s) => s.track?.kind === "video");
+        if (sender) await sender.replaceTrack(screenTrack).catch(() => undefined);
+      }
+      screenTrack.onended = () => {
+        setScreenStream(null);
+        const cameraTrack = localStreamRef.current?.getVideoTracks()[0] ?? null;
+        for (const pc of pcRef.current.values()) {
+          const sender = pc.getSenders().find((s) => s.track?.kind === "video");
+          if (sender) void sender.replaceTrack(cameraTrack).catch(() => undefined);
+        }
+      };
+    } catch {
+      toast("Screen sharing was cancelled");
+    }
+  }
+
   function leave() {
     wsRef.current?.close();
     for (const pc of pcRef.current.values()) pc.close();
     localStreamRef.current?.getTracks().forEach((t) => t.stop());
+    screenStream?.getTracks().forEach((t) => t.stop());
     navigate("/app/interview-room");
   }
 
+  // M / V shortcuts, ignored while typing into the idea board or feedback note.
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      const target = e.target as HTMLElement | null;
+      if (target && ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName)) return;
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      if (e.key === "m" || e.key === "M") toggleMute();
+      if (e.key === "v" || e.key === "V") toggleVideo();
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
   const currentQuestionIdeas = ideas.filter((idea) => idea.questionId === currentQuestion?.id);
-  const tileCount = 1 + participants.size;
-  const rosterEntries: RosterEntry[] = [
-    ...(currentUser ? [{ userId: currentUser.id, name: currentUser.name || currentUser.email, isSelf: true }] : []),
-    ...[...participants.entries()].map(([userId, name]) => ({ userId, name })),
+  const localName = currentUser ? currentUser.name || currentUser.email : "You";
+
+  const speakingStreams = useMemo(() => {
+    const map = new Map<string, MediaStream>();
+    if (currentUser && localStream) map.set(currentUser.id, localStream);
+    for (const [userId, stream] of remoteStreams) map.set(userId, stream);
+    return map;
+  }, [currentUser, localStream, remoteStreams]);
+  const speakingIds = useSpeakingDetection(speakingStreams);
+
+  const stageParticipants: StageParticipant[] = [
+    ...(currentUser
+      ? [
+          {
+            userId: currentUser.id,
+            name: localName,
+            stream: localStream,
+            isLocal: true,
+            isHost: currentUser.id === hostUserId,
+            micOn: !muted,
+            cameraOn: !videoOff,
+            averageRating: averageRatings.get(currentUser.id) ?? null,
+          },
+        ]
+      : []),
+    ...[...participants.entries()].map(([userId, name]) => ({
+      userId,
+      name,
+      stream: remoteStreams.get(userId) ?? null,
+      isLocal: false,
+      isHost: userId === hostUserId,
+      micOn: true,
+      cameraOn: true,
+      averageRating: averageRatings.get(userId) ?? null,
+    })),
   ];
 
+  const people: PersonEntry[] = stageParticipants.map((p) => ({
+    userId: p.userId,
+    name: p.name,
+    isLocal: p.isLocal,
+    isHost: p.isHost,
+    micOn: p.micOn,
+    averageRating: p.averageRating,
+  }));
+
+  const currentSpeakerName = currentSpeakerUserId
+    ? (stageParticipants.find((p) => p.userId === currentSpeakerUserId)?.name ?? null)
+    : null;
+
+  if (!room || !currentUser) {
+    return (
+      <div className="grid min-h-screen place-items-center bg-bg">
+        <Spinner className="h-6 w-6" />
+      </div>
+    );
+  }
+
+  // Pre-join: device check, room facts, and an explicit join action.
+  if (!joined) {
+    return (
+      <main className="flex min-h-screen flex-col gap-4 bg-bg p-3 sm:p-5">
+        <RoomHeader
+          code={code}
+          topic={room.topic}
+          status="connecting"
+          participantCount={room.participants.filter((p) => !p.leftAt).length}
+          capacity={room.maxParticipants}
+          startedAt={null}
+        />
+        <PreJoinScreen
+          room={room}
+          userId={currentUser.id}
+          userName={localName}
+          joining={false}
+          onJoin={(prefs) => setJoinPrefs(prefs)}
+        />
+      </main>
+    );
+  }
+
   return (
-    <div className="space-y-4">
-      <div>
-        <h1 className="text-xl font-semibold text-ink-900 dark:text-white">Practice room</h1>
-        {room && <p className="text-sm text-ink-500 dark:text-ink-400">{new Date(room.scheduledAt).toLocaleString()}</p>}
-      </div>
+    <main className="flex h-[100dvh] flex-col gap-3 overflow-hidden bg-bg p-3 sm:p-4">
+      <RoomHeader
+        code={code}
+        topic={room.topic}
+        status={status}
+        participantCount={stageParticipants.length}
+        capacity={room.maxParticipants}
+        startedAt={startedAt}
+      />
 
-      <RoomRoster entries={rosterEntries} currentSpeakerUserId={currentSpeakerUserId} averageRatings={averageRatings} />
+      <div className="flex min-h-0 flex-1 flex-col gap-3 lg:flex-row">
+        <section className="flex min-h-0 flex-1 flex-col gap-3">
+          {status === "connecting" ? (
+            <ConnectingState />
+          ) : status === "error" ? (
+            <div className="grid flex-1 place-items-center">
+              <ErrorState message={errorMessage ?? "The connection dropped."} onRetry={() => window.location.reload()} />
+            </div>
+          ) : status === "ended" ? (
+            <div className="grid flex-1 place-items-center">
+              <EndedState code={code} />
+            </div>
+          ) : (
+            <>
+              {status === "waiting" && (
+                <WaitingState present={stageParticipants.length} needed={minParticipants || room.minParticipants} />
+              )}
+              <ParticipantStage
+                participants={stageParticipants}
+                speakingIds={speakingIds}
+                currentSpeakerUserId={currentSpeakerUserId}
+                screenStream={screenStream}
+                screenOwnerName={screenStream ? localName : null}
+              />
+            </>
+          )}
 
-      {(status === "active" || status === "waiting") && (
-        <QuestionPanel
-          questionText={currentQuestion?.text ?? null}
-          questionIndex={currentQuestionIndex}
-          totalQuestions={questions.length}
-          isHost={isHost}
-          onAdvance={advanceTurn}
-          onRegenerate={() => regenerateMutation.mutate()}
-          regenerating={regenerateMutation.isPending}
-          disabled={status !== "active"}
-        />
-      )}
+          {feedbackPrompt && (
+            <FeedbackPanel
+              speakerName={feedbackPrompt.speakerName}
+              questionText={currentQuestion?.text ?? null}
+              submitting={submitFeedbackMutation.isPending}
+              onSkip={() => setFeedbackPrompt(null)}
+              onSubmit={(rating, comment) =>
+                submitFeedbackMutation.mutate({
+                  questionId: feedbackPrompt.questionId,
+                  turnSpeakerUserId: feedbackPrompt.speakerUserId,
+                  rating,
+                  comment,
+                })
+              }
+            />
+          )}
+        </section>
 
-      {(status === "active" || status === "waiting") && currentQuestion && (
-        <IdeaBoard
-          ideas={currentQuestionIdeas}
-          onPost={(text) => postIdeaMutation.mutate(text)}
-          posting={postIdeaMutation.isPending}
-        />
-      )}
-
-      {status === "active" && <RecapTab code={code} enabled />}
-
-      <div className={cn("grid grid-cols-1 gap-4", gridColsClass(tileCount))}>
-        <Card className="overflow-hidden">
-          <video ref={localVideoRef} autoPlay muted playsInline className="aspect-video w-full bg-ink-900 object-cover" />
-          <p className="p-2 text-center text-xs text-ink-400">You</p>
-        </Card>
-        {[...participants.entries()].map(([userId, name]) => (
-          <RemoteTile key={userId} name={name} stream={remoteStreams.get(userId) ?? null} />
-        ))}
-      </div>
-
-      {status === "connecting" && (
-        <div className="flex items-center justify-center gap-2 text-sm text-ink-500 dark:text-ink-400">
-          <Spinner className="h-4 w-4" /> Connecting…
-        </div>
-      )}
-      {status === "waiting" && (
-        <div className="flex items-center justify-center gap-2 text-sm text-ink-500 dark:text-ink-400">
-          <Spinner className="h-4 w-4" /> Waiting for at least {minParticipants} people — {tileCount}/{minParticipants} here…
-        </div>
-      )}
-      {status === "ended" && <p className="text-center text-sm text-ink-500 dark:text-ink-400">The room has ended.</p>}
-      {status === "error" && <p className="text-center text-sm text-red-600">{errorMessage}</p>}
-
-      <div className="flex justify-center gap-3">
-        <Button variant="secondary" onClick={toggleMute}>
-          {muted ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
-        </Button>
-        <Button variant="secondary" onClick={toggleVideo}>
-          {videoOff ? <VideoOff className="h-4 w-4" /> : <Video className="h-4 w-4" />}
-        </Button>
-        <Button variant="danger" onClick={leave}>
-          <PhoneOff className="h-4 w-4" /> Leave
-        </Button>
-        {isHost && status === "active" && (
-          <Button variant="secondary" onClick={() => endRoomMutation.mutate()} disabled={endRoomMutation.isPending}>
-            {endRoomMutation.isPending ? "Ending…" : "End room"}
-          </Button>
+        {panel.open && (
+          <RoomSidePanel
+            tab={panel.tab}
+            onTabChange={panel.setTab}
+            onClose={() => panel.setOpen(false)}
+            peopleCount={people.length}
+            ideaCount={currentQuestionIdeas.length}
+            className="h-64 shrink-0 lg:h-auto lg:w-[22rem]"
+          >
+            {panel.tab === "questions" && (
+              <QuestionsPanel
+                questions={questions}
+                currentIndex={currentQuestionIndex}
+                currentSpeakerName={currentSpeakerName}
+                isHost={isHost}
+                regenerating={regenerateMutation.isPending}
+                advanceDisabled={status !== "active"}
+                onAdvance={advanceTurn}
+                onRegenerate={() => regenerateMutation.mutate()}
+              />
+            )}
+            {panel.tab === "board" && (
+              <IdeaBoardPanel
+                ideas={currentQuestionIdeas}
+                onPost={(text) => postIdeaMutation.mutate(text)}
+                posting={postIdeaMutation.isPending}
+                disabled={!currentQuestion}
+              />
+            )}
+            {panel.tab === "people" && (
+              <PeoplePanel
+                people={people}
+                currentSpeakerUserId={currentSpeakerUserId}
+                speakingIds={speakingIds}
+                minParticipants={minParticipants || room.minParticipants}
+              />
+            )}
+            {panel.tab === "recap" && <RecapPanel code={code} enabled={status === "active"} />}
+          </RoomSidePanel>
         )}
       </div>
 
-      {feedbackPrompt && (
-        <FeedbackDrawer
-          speakerName={feedbackPrompt.speakerName}
-          submitting={submitFeedbackMutation.isPending}
-          onDismiss={() => setFeedbackPrompt(null)}
-          onSubmit={(rating, comment) =>
-            submitFeedbackMutation.mutate({
-              questionId: feedbackPrompt.questionId,
-              turnSpeakerUserId: feedbackPrompt.speakerUserId,
-              rating,
-              comment,
-            })
-          }
-        />
-      )}
-    </div>
-  );
-}
+      <MeetingControls
+        micOn={!muted}
+        cameraOn={!videoOff}
+        sharing={screenStream !== null}
+        panelOpen={panel.open}
+        isHost={isHost}
+        canEnd={status === "active" && !endRoomMutation.isPending}
+        onToggleMic={toggleMute}
+        onToggleCamera={toggleVideo}
+        onToggleShare={() => void toggleShare()}
+        onTogglePanel={() => panel.setOpen(!panel.open)}
+        onLeave={() => setLeaveOpen(true)}
+        onEnd={() => setEndOpen(true)}
+        className="mx-auto"
+      />
 
-function RemoteTile({ name, stream }: { name: string; stream: MediaStream | null }) {
-  const videoRef = useRef<HTMLVideoElement>(null);
-
-  useEffect(() => {
-    if (videoRef.current) videoRef.current.srcObject = stream;
-  }, [stream]);
-
-  return (
-    <Card className="overflow-hidden">
-      <video ref={videoRef} autoPlay playsInline className="aspect-video w-full bg-ink-900 object-cover" />
-      <p className="p-2 text-center text-xs text-ink-400">{stream ? name : `Connecting to ${name}…`}</p>
-    </Card>
+      <ConfirmDialog
+        open={leaveOpen}
+        title="Leave this room?"
+        description="You can rejoin while the session is still running."
+        confirmLabel="Leave"
+        onConfirm={leave}
+        onCancel={() => setLeaveOpen(false)}
+      />
+      <ConfirmDialog
+        open={endOpen}
+        title="End the session for everyone?"
+        description="The room closes for all participants and the AI recap starts generating."
+        confirmLabel="End session"
+        destructive
+        busy={endRoomMutation.isPending}
+        onConfirm={() => endRoomMutation.mutate()}
+        onCancel={() => setEndOpen(false)}
+      />
+    </main>
   );
 }

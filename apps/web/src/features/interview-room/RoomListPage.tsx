@@ -1,29 +1,55 @@
-import { useState, type KeyboardEvent } from "react";
-import { Link } from "react-router-dom";
+import { useMemo, useState, type KeyboardEvent } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Video, Plus, Trash2, X, Clock, Users, Mail, ArrowRight, Calendar, LogIn } from "lucide-react";
+import {
+  ArrowRight,
+  Calendar,
+  Clock,
+  LogIn,
+  Mail,
+  Plus,
+  Sparkles,
+  Trash2,
+  Users,
+  Video,
+  X,
+} from "lucide-react";
 import type { MockInterviewRoom } from "@believe-ai/shared";
 import { Button } from "../../components/ui/Button.js";
 import { Input } from "../../components/ui/Input.js";
-import { Card, CardBody } from "../../components/ui/Card.js";
 import { Badge } from "../../components/ui/Badge.js";
+import { Drawer } from "../../components/ui/Drawer.js";
+import { ConfirmDialog } from "../../components/ui/ConfirmDialog.js";
 import { EmptyState } from "../../components/ui/EmptyState.js";
-import { Spinner } from "../../components/ui/Spinner.js";
+import { PageHeader } from "../../components/ui/PageHeader.js";
+import { Skeleton } from "../../components/ui/Skeleton.js";
+import { SectionLabel, Surface } from "../../components/ui/Surface.js";
+import { toast } from "../../components/ui/Toast.js";
 import { useCountdown } from "../../hooks/useCountdown.js";
 import { cn } from "../../lib/cn.js";
 import { cancelRoom, fetchMyRooms, scheduleRoom } from "./interviewRoomApi.js";
+import { avatarTint, initials } from "./room/roomFormat.js";
 
 const DURATIONS = [15, 30, 45, 60];
 const TARGET_SIZES = [3, 4, 5, 6];
+
+type HubTab = "upcoming" | "past" | "cancelled";
 
 function toLocalDateTimeInputValue(date: Date): string {
   const pad = (n: number) => String(n).padStart(2, "0");
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 
+/** The practice-room hub: what's next, what's scheduled, and a way in by code. */
 export function RoomListPage() {
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
+
   const [showForm, setShowForm] = useState(false);
+  const [tab, setTab] = useState<HubTab>("upcoming");
+  const [pendingCancel, setPendingCancel] = useState<MockInterviewRoom | null>(null);
+  const [joinCode, setJoinCode] = useState("");
+
   const defaultTime = new Date(Date.now() + 30 * 60_000);
   const [scheduledAt, setScheduledAt] = useState(toLocalDateTimeInputValue(defaultTime));
   const [durationMinutes, setDurationMinutes] = useState(30);
@@ -55,15 +81,40 @@ export function RoomListPage() {
       setEmailInput("");
       setTopic("");
       setShowForm(false);
+      toast("Practice room scheduled");
     },
   });
 
   const cancelMutation = useMutation({
     mutationFn: cancelRoom,
-    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["mock-interview-rooms"] }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["mock-interview-rooms"] });
+      setPendingCancel(null);
+      toast("Room cancelled");
+    },
   });
 
   const maxInvites = targetSize - 1;
+
+  const grouped = useMemo(() => {
+    const list = rooms ?? [];
+    return {
+      upcoming: list.filter((r) => r.status === "scheduled"),
+      past: list.filter((r) => r.status === "completed"),
+      cancelled: list.filter((r) => r.status === "cancelled"),
+    };
+  }, [rooms]);
+
+  // Soonest scheduled room, so the hub always answers "what's next?" first.
+  const nextRoom = useMemo(
+    () =>
+      [...grouped.upcoming].sort(
+        (a, b) => new Date(a.scheduledAt).getTime() - new Date(b.scheduledAt).getTime(),
+      )[0] ?? null,
+    [grouped.upcoming],
+  );
+
+  const visible = grouped[tab];
 
   function addEmail() {
     const email = emailInput.trim();
@@ -79,281 +130,379 @@ export function RoomListPage() {
     }
   }
 
-  function removeEmail(email: string) {
-    setInviteEmails((prev) => prev.filter((e) => e !== email));
-  }
-
   return (
     <div className="space-y-6">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h1 className="flex items-center gap-2 text-2xl font-semibold text-ink-900 dark:text-white">
-            <Video className="h-5 w-5 text-brand-500" /> Group Practice Room
-          </h1>
-          <p className="text-sm text-ink-500 dark:text-ink-400">
-            Schedule a peer practice room for 3–6 people — the join link opens 10 minutes early.
-          </p>
-        </div>
-        <Button onClick={() => setShowForm((s) => !s)}>
-          <Plus className="h-4 w-4" /> {showForm ? "Cancel" : "Schedule"}
-        </Button>
+      <PageHeader
+        title="Group practice rooms"
+        description="Peer interview practice for 3–6 people. AI generates the questions, rotates the turns, and writes the recap."
+        actions={
+          <Button onClick={() => setShowForm(true)}>
+            <Plus className="h-4 w-4" /> Schedule room
+          </Button>
+        }
+      />
+
+      <div className="grid gap-4 lg:grid-cols-[1.6fr_1fr]">
+        {nextRoom ? (
+          <NextSessionCard room={nextRoom} />
+        ) : (
+          <Surface level={2} className="flex flex-col justify-center p-6">
+            <SectionLabel>Next session</SectionLabel>
+            <p className="mt-2 text-h2 text-fg">Nothing on the calendar</p>
+            <p className="mt-1 text-sm text-fg-muted">
+              Schedule a room and invite up to five peers — reminders go out by email.
+            </p>
+            <Button className="mt-4 self-start" onClick={() => setShowForm(true)}>
+              <Plus className="h-4 w-4" /> Schedule your first room
+            </Button>
+          </Surface>
+        )}
+
+        <Surface level={2} className="p-5">
+          <SectionLabel>Join with a code</SectionLabel>
+          <p className="mt-1.5 text-sm text-fg-muted">Got a room code from a peer? Drop it in.</p>
+          <form
+            className="mt-3 flex gap-2"
+            onSubmit={(e) => {
+              e.preventDefault();
+              const code = joinCode.trim();
+              if (code) navigate(`/app/interview-room/${code}`);
+            }}
+          >
+            <Input
+              placeholder="Room code"
+              value={joinCode}
+              onChange={(e) => setJoinCode(e.target.value)}
+              aria-label="Room code"
+            />
+            <Button type="submit" variant="secondary" disabled={!joinCode.trim()}>
+              Join
+            </Button>
+          </form>
+
+          <div className="mt-5 space-y-2 border-t border-line pt-4 text-sm text-fg-muted">
+            <p className="flex items-start gap-2">
+              <Sparkles className="mt-0.5 h-3.5 w-3.5 shrink-0 text-accent" aria-hidden />
+              Questions are AI-generated from your topic and target role.
+            </p>
+            <p className="flex items-start gap-2">
+              <Clock className="mt-0.5 h-3.5 w-3.5 shrink-0 text-accent" aria-hidden />
+              The join window opens 10 minutes before the start.
+            </p>
+          </div>
+        </Surface>
       </div>
 
-      {showForm && (
-        <Card>
-          <CardBody className="space-y-3">
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-              <label className="block text-sm text-ink-600 dark:text-ink-300">
-                Date &amp; time
-                <Input
-                  className="mt-1"
-                  type="datetime-local"
-                  value={scheduledAt}
-                  onChange={(e) => setScheduledAt(e.target.value)}
-                />
-              </label>
-              <label className="block text-sm text-ink-600 dark:text-ink-300">
-                Duration
-                <select
-                  className="mt-1 h-10 w-full rounded-xl border border-ink-200 bg-white px-3 text-sm dark:border-ink-700 dark:bg-ink-800 dark:text-white"
-                  value={durationMinutes}
-                  onChange={(e) => setDurationMinutes(Number(e.target.value))}
-                >
-                  {DURATIONS.map((d) => (
-                    <option key={d} value={d}>
-                      {d} minutes
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="block text-sm text-ink-600 dark:text-ink-300">
-                Group size
-                <select
-                  className="mt-1 h-10 w-full rounded-xl border border-ink-200 bg-white px-3 text-sm dark:border-ink-700 dark:bg-ink-800 dark:text-white"
-                  value={targetSize}
-                  onChange={(e) => {
-                    const size = Number(e.target.value);
-                    setTargetSize(size);
-                    setInviteEmails((prev) => prev.slice(0, size - 1));
-                  }}
-                >
-                  {TARGET_SIZES.map((size) => (
-                    <option key={size} value={size}>
-                      {size} people
-                    </option>
-                  ))}
-                </select>
-              </label>
-            </div>
-
-            <div>
-              <label className="block text-sm text-ink-600 dark:text-ink-300">
-                Invite by email — up to {maxInvites} ({inviteEmails.length}/{maxInvites})
-              </label>
-              <div className="mt-1 flex gap-2">
-                <Input
-                  placeholder="name@example.com"
-                  type="email"
-                  value={emailInput}
-                  onChange={(e) => setEmailInput(e.target.value)}
-                  onKeyDown={handleEmailKeyDown}
-                  disabled={inviteEmails.length >= maxInvites}
-                />
-                <Button
-                  type="button"
-                  variant="secondary"
-                  onClick={addEmail}
-                  disabled={!emailInput.trim() || inviteEmails.length >= maxInvites}
-                >
-                  Add
-                </Button>
-              </div>
-              {inviteEmails.length > 0 && (
-                <div className="mt-2 flex flex-wrap gap-1.5">
-                  {inviteEmails.map((email) => (
-                    <span
-                      key={email}
-                      className="flex items-center gap-1 rounded-pill bg-ink-100 px-2.5 py-1 text-xs text-ink-600 dark:bg-ink-800 dark:text-ink-300"
-                    >
-                      {email}
-                      <button type="button" onClick={() => removeEmail(email)} aria-label={`Remove ${email}`}>
-                        <X className="h-3 w-3" />
-                      </button>
-                    </span>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            <label className="block text-sm text-ink-600 dark:text-ink-300">
-              Topic (optional) — helps tailor AI-generated questions
-              <Input
-                className="mt-1"
-                placeholder="e.g. System design, behavioral, frontend"
-                value={topic}
-                onChange={(e) => setTopic(e.target.value)}
-              />
-            </label>
-
-            <Button onClick={() => scheduleMutation.mutate()} disabled={scheduleMutation.isPending}>
-              {scheduleMutation.isPending ? "Scheduling…" : "Schedule room"}
-            </Button>
-            {scheduleMutation.isError && <p className="text-sm text-red-600">Couldn't schedule — try a different time.</p>}
-          </CardBody>
-        </Card>
-      )}
+      <div className="flex gap-1.5" role="tablist" aria-label="Room groups">
+        {(
+          [
+            ["upcoming", "Upcoming", grouped.upcoming.length],
+            ["past", "Completed", grouped.past.length],
+            ["cancelled", "Cancelled", grouped.cancelled.length],
+          ] as const
+        ).map(([id, label, count]) => (
+          <button
+            key={id}
+            type="button"
+            role="tab"
+            aria-selected={tab === id}
+            onClick={() => setTab(id)}
+            className={cn(
+              "rounded-pill px-3.5 py-1.5 text-label font-medium transition-colors",
+              tab === id ? "bg-fg/[0.08] text-fg" : "text-fg-subtle hover:text-fg",
+            )}
+          >
+            {label} <span className="tabular-nums text-fg-subtle">{count}</span>
+          </button>
+        ))}
+      </div>
 
       {isLoading ? (
-        <div className="flex justify-center py-16">
-          <Spinner className="h-6 w-6 text-ink-400" />
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          {[0, 1, 2].map((i) => (
+            <Skeleton key={i} className="h-52 rounded-2xl" />
+          ))}
         </div>
-      ) : !rooms || rooms.length === 0 ? (
-        <EmptyState title="No rooms scheduled" description="Schedule your first practice room above." />
+      ) : visible.length === 0 ? (
+        <EmptyState
+          icon={<Video className="h-5 w-5" />}
+          title={tab === "upcoming" ? "No rooms scheduled" : tab === "past" ? "No completed sessions yet" : "Nothing cancelled"}
+          description={
+            tab === "upcoming"
+              ? "Schedule a practice room and invite your peers."
+              : "Finished sessions and their AI recaps will show up here."
+          }
+          action={tab === "upcoming" ? <Button onClick={() => setShowForm(true)}>Schedule room</Button> : undefined}
+        />
       ) : (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
-          {rooms.map((room) => (
-            <RoomCard key={room.id} room={room} onCancel={() => cancelMutation.mutate(room.id)} />
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          {visible.map((room) => (
+            <RoomCard key={room.id} room={room} onCancel={() => setPendingCancel(room)} />
           ))}
         </div>
       )}
+
+      <Drawer
+        open={showForm}
+        title="Schedule a practice room"
+        subtitle="3–6 people, AI questions, rotating turns"
+        onClose={() => setShowForm(false)}
+        footer={
+          <div className="flex items-center gap-2">
+            <Button onClick={() => scheduleMutation.mutate()} disabled={scheduleMutation.isPending}>
+              {scheduleMutation.isPending ? "Scheduling…" : "Schedule room"}
+            </Button>
+            <Button variant="ghost" onClick={() => setShowForm(false)}>
+              Cancel
+            </Button>
+          </div>
+        }
+      >
+        <div className="space-y-4">
+          <label className="block">
+            <span className="text-label text-fg-muted">Date &amp; time</span>
+            <Input className="mt-1" type="datetime-local" value={scheduledAt} onChange={(e) => setScheduledAt(e.target.value)} />
+          </label>
+
+          <div className="grid gap-3 sm:grid-cols-2">
+            <label className="block">
+              <span className="text-label text-fg-muted">Duration</span>
+              <select
+                className="mt-1 h-10 w-full rounded-xl border border-line bg-surface px-3 text-sm text-fg outline-none focus:border-line-strong"
+                value={durationMinutes}
+                onChange={(e) => setDurationMinutes(Number(e.target.value))}
+              >
+                {DURATIONS.map((d) => (
+                  <option key={d} value={d}>
+                    {d} minutes
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="block">
+              <span className="text-label text-fg-muted">Group size</span>
+              <select
+                className="mt-1 h-10 w-full rounded-xl border border-line bg-surface px-3 text-sm text-fg outline-none focus:border-line-strong"
+                value={targetSize}
+                onChange={(e) => {
+                  const size = Number(e.target.value);
+                  setTargetSize(size);
+                  setInviteEmails((prev) => prev.slice(0, size - 1));
+                }}
+              >
+                {TARGET_SIZES.map((size) => (
+                  <option key={size} value={size}>
+                    {size} people
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+
+          <div>
+            <span className="text-label text-fg-muted">
+              Invite by email — up to {maxInvites} ({inviteEmails.length}/{maxInvites})
+            </span>
+            <div className="mt-1 flex gap-2">
+              <Input
+                placeholder="name@example.com"
+                type="email"
+                value={emailInput}
+                onChange={(e) => setEmailInput(e.target.value)}
+                onKeyDown={handleEmailKeyDown}
+                disabled={inviteEmails.length >= maxInvites}
+              />
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={addEmail}
+                disabled={!emailInput.trim() || inviteEmails.length >= maxInvites}
+              >
+                Add
+              </Button>
+            </div>
+            {inviteEmails.length > 0 && (
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {inviteEmails.map((email) => (
+                  <span
+                    key={email}
+                    className="flex items-center gap-1 rounded-pill bg-fg/[0.06] px-2.5 py-1 text-caption text-fg-muted"
+                  >
+                    {email}
+                    <button type="button" onClick={() => setInviteEmails((prev) => prev.filter((e) => e !== email))} aria-label={`Remove ${email}`}>
+                      <X className="h-3 w-3" />
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <label className="block">
+            <span className="text-label text-fg-muted">Topic (optional) — tailors the AI questions</span>
+            <Input
+              className="mt-1"
+              placeholder="e.g. System design, behavioural, frontend"
+              value={topic}
+              onChange={(e) => setTopic(e.target.value)}
+            />
+          </label>
+
+          {scheduleMutation.isError && (
+            <p className="text-label text-critical">Couldn't schedule — try a different time.</p>
+          )}
+        </div>
+      </Drawer>
+
+      <ConfirmDialog
+        open={pendingCancel !== null}
+        title="Cancel this room?"
+        description="Invited peers won't be able to join. This can't be undone."
+        confirmLabel="Cancel room"
+        cancelLabel="Keep it"
+        destructive
+        busy={cancelMutation.isPending}
+        onConfirm={() => pendingCancel && cancelMutation.mutate(pendingCancel.id)}
+        onCancel={() => setPendingCancel(null)}
+      />
     </div>
   );
 }
 
-/** "Live now" once the join window is open, otherwise a live countdown to
- * the scheduled start (ticks every second) — shown in the viewer's own
- * local time zone, same as the date/time text below it. */
-function RoomStatusPill({ scheduledAt, joinable }: { scheduledAt: string; joinable: boolean }) {
-  const { label, elapsed } = useCountdown(scheduledAt);
+/** Hero card for the soonest scheduled room, with the live countdown. */
+function NextSessionCard({ room }: { room: MockInterviewRoom }) {
+  const { label, elapsed } = useCountdown(room.scheduledAt);
+  const date = new Date(room.scheduledAt);
+  const active = room.participants.filter((p) => !p.leftAt);
 
-  if (joinable) {
-    return (
-      <span className="inline-flex items-center gap-1.5 rounded-full border border-lime-500/25 bg-lime-500/10 px-3.5 py-1.5 text-sm text-lime-600 dark:text-lime-400">
-        <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-lime-500" />
-        Live now
-      </span>
-    );
-  }
   return (
-    <span className="inline-flex items-center gap-1.5 rounded-full border border-violet-500/20 bg-violet-500/[0.07] px-3.5 py-1.5 text-sm text-ink-500 dark:text-ink-400">
-      <Clock className="h-3.5 w-3.5 text-violet-500 dark:text-violet-400" />
-      {elapsed ? (
-        <span className="font-semibold text-violet-600 dark:text-violet-300">Starting…</span>
-      ) : (
-        <>
-          Starts in <span className="font-semibold text-violet-600 dark:text-violet-300">{label}</span>
-        </>
-      )}
-    </span>
-  );
-}
+    <Surface level={2} className="relative overflow-hidden p-6">
+      <div className="pointer-events-none absolute -right-16 -top-16 h-48 w-48 rounded-full bg-accent/15 blur-3xl" aria-hidden />
+      <div className="relative">
+        <div className="flex items-center justify-between gap-3">
+          <SectionLabel>Next session</SectionLabel>
+          <Badge tone={room.joinable ? "success" : "accent"}>
+            {room.joinable ? "Join window open" : elapsed ? "Starting…" : `Starts in ${label}`}
+          </Badge>
+        </div>
 
-function StatChip({ icon: Icon, label }: { icon: typeof Clock; label: string }) {
-  return (
-    <span className="inline-flex items-center gap-2 text-sm text-ink-500 dark:text-ink-400">
-      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-violet-500/10 text-violet-600 dark:text-violet-400">
-        <Icon className="h-4 w-4" />
-      </span>
-      {label}
-    </span>
+        <h2 className="mt-2 text-h1 text-fg">{room.topic || "Practice session"}</h2>
+        <p className="mt-1 text-sm text-fg-muted">
+          {date.toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" })} ·{" "}
+          {date.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })} · {room.durationMinutes} min
+        </p>
+
+        <div className="mt-4 flex items-center gap-3">
+          <div className="flex -space-x-2">
+            {active.slice(0, 5).map((p) => (
+              <span
+                key={p.userId}
+                title={p.name}
+                className={cn(
+                  "grid h-8 w-8 place-items-center rounded-pill text-caption font-semibold ring-2 ring-surface",
+                  avatarTint(p.userId),
+                )}
+              >
+                {initials(p.name)}
+              </span>
+            ))}
+            {active.length === 0 && (
+              <span className="grid h-8 w-8 place-items-center rounded-pill bg-fg/[0.06] text-fg-subtle">
+                <Users className="h-3.5 w-3.5" aria-hidden />
+              </span>
+            )}
+          </div>
+          <p className="text-label text-fg-muted">
+            {active.length}/{room.maxParticipants} joined · needs {room.minParticipants} to start
+          </p>
+        </div>
+
+        <div className="mt-5 flex flex-wrap items-center gap-2">
+          <Link to={`/app/interview-room/${room.code}`}>
+            <Button disabled={!room.joinable}>
+              <LogIn className="h-4 w-4" /> {room.joinable ? "Join room" : "Opens 10 min early"}
+            </Button>
+          </Link>
+          <span className="rounded-pill bg-fg/[0.06] px-3 py-1.5 font-mono text-caption uppercase tracking-wider text-fg-muted">
+            {room.code}
+          </span>
+        </div>
+      </div>
+    </Surface>
   );
 }
 
 function RoomCard({ room, onCancel }: { room: MockInterviewRoom; onCancel: () => void }) {
   const isScheduled = room.status === "scheduled";
   const isCompleted = room.status === "completed";
-  const isCancelled = room.status === "cancelled";
   const date = new Date(room.scheduledAt);
 
   return (
-    <div
-      className={cn(
-        "group relative flex flex-col overflow-hidden rounded-3xl border p-5 transition-all duration-300",
-        "border-violet-500/15 bg-white shadow-[0_1px_2px_rgba(14,15,20,0.04),0_16px_40px_-24px_rgba(139,92,246,0.35)]",
-        "dark:border-violet-500/20 dark:bg-[#0d0a17] dark:shadow-[0_0_0_1px_rgba(139,92,246,0.06),0_20px_60px_-24px_rgba(139,92,246,0.35)]",
-        isCancelled
-          ? "opacity-60"
-          : "hover:-translate-y-1 hover:border-violet-400/40 hover:shadow-[0_1px_2px_rgba(14,15,20,0.04),0_20px_50px_-20px_rgba(139,92,246,0.5)] dark:hover:border-violet-400/40 dark:hover:shadow-[0_0_0_1px_rgba(139,92,246,0.12),0_26px_70px_-20px_rgba(139,92,246,0.55)]",
-      )}
+    <Surface
+      level={2}
+      interactive={room.status !== "cancelled"}
+      className={cn("group relative flex flex-col p-5", room.status === "cancelled" && "opacity-60")}
     >
-      {/* Ambient glow, dark mode only — a soft violet bloom in the corner. */}
-      <div className="pointer-events-none absolute -right-10 -top-10 hidden h-40 w-40 rounded-full bg-violet-600/20 blur-3xl dark:block" />
+      <div className="flex items-start justify-between gap-3">
+        <span className="grid h-10 w-10 place-items-center rounded-xl bg-accent-soft text-accent">
+          <Video className="h-5 w-5" aria-hidden />
+        </span>
+        {isScheduled ? (
+          <Badge tone={room.joinable ? "success" : "neutral"}>{room.joinable ? "Live now" : "Scheduled"}</Badge>
+        ) : (
+          <Badge tone={isCompleted ? "info" : "neutral"}>{room.status}</Badge>
+        )}
+      </div>
+
+      <h3 className="mt-4 text-h3 text-fg">{room.topic || "Practice session"}</h3>
+      <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-label text-fg-muted">
+        <span className="inline-flex items-center gap-1.5">
+          <Calendar className="h-3.5 w-3.5" aria-hidden />
+          {date.toLocaleDateString(undefined, { month: "short", day: "numeric" })}
+        </span>
+        <span className="inline-flex items-center gap-1.5">
+          <Clock className="h-3.5 w-3.5" aria-hidden />
+          {date.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })} · {room.durationMinutes}m
+        </span>
+        <span className="inline-flex items-center gap-1.5">
+          <Users className="h-3.5 w-3.5" aria-hidden />
+          {room.participants.length}/{room.maxParticipants}
+        </span>
+        {room.inviteEmails.length > 0 && (
+          <span className="inline-flex items-center gap-1.5" title={room.inviteEmails.join(", ")}>
+            <Mail className="h-3.5 w-3.5" aria-hidden />
+            {room.inviteEmails.length}
+          </span>
+        )}
+      </div>
+
+      <div className="mt-auto pt-5">
+        {isScheduled && (
+          <Link to={`/app/interview-room/${room.code}`} className="block">
+            <Button className="w-full" disabled={!room.joinable}>
+              <LogIn className="h-4 w-4" /> Join room
+            </Button>
+          </Link>
+        )}
+        {isCompleted && (
+          <Link to={`/app/interview-room/${room.code}/summary`} className="block">
+            <Button className="w-full" variant="secondary">
+              View recap <ArrowRight className="h-4 w-4" />
+            </Button>
+          </Link>
+        )}
+      </div>
 
       {isScheduled && (
         <button
           type="button"
           onClick={onCancel}
           aria-label="Cancel room"
-          className="absolute right-4 top-4 z-10 flex h-8 w-8 items-center justify-center rounded-full text-ink-300 opacity-0 transition-all duration-200 hover:bg-red-500/10 hover:text-red-500 focus-visible:opacity-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet-500 group-hover:opacity-100 dark:text-ink-600"
+          className="absolute right-3 top-3 grid h-8 w-8 place-items-center rounded-pill text-fg-subtle opacity-0 transition-opacity hover:bg-critical/10 hover:text-critical focus-visible:opacity-100 group-hover:opacity-100"
         >
-          <Trash2 className="h-4 w-4" />
+          <Trash2 className="h-3.5 w-3.5" />
         </button>
       )}
-
-      <div className="relative flex items-start justify-between gap-3">
-        <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-500 to-purple-700 shadow-[0_8px_24px_-6px_rgba(139,92,246,0.65),inset_0_1px_0_rgba(255,255,255,0.25)] ring-1 ring-white/10 transition-transform duration-300 group-hover:scale-110">
-          <Video className="h-6 w-6 text-white" />
-        </div>
-        {isScheduled ? (
-          <RoomStatusPill scheduledAt={room.scheduledAt} joinable={room.joinable} />
-        ) : (
-          <Badge tone={isCompleted ? "info" : "neutral"}>{room.status}</Badge>
-        )}
-      </div>
-
-      <div className="relative mt-5">
-        <h3 className="text-xl font-bold leading-snug text-ink-900 dark:text-white">{room.topic || "Practice session"}</h3>
-        <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-ink-500 dark:text-ink-400">
-          <span className="inline-flex items-center gap-1.5">
-            <Calendar className="h-4 w-4" />
-            {date.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}
-          </span>
-          <span className="text-ink-200 dark:text-ink-700">|</span>
-          <span className="inline-flex items-center gap-1.5">
-            <Clock className="h-4 w-4" />
-            {date.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })}
-          </span>
-        </div>
-      </div>
-
-      <div className="relative my-4 h-px bg-violet-500/10 dark:bg-white/5" />
-
-      <div className="relative flex flex-wrap items-center gap-x-5 gap-y-2">
-        <StatChip icon={Clock} label={`${room.durationMinutes} min`} />
-        <StatChip icon={Users} label={`${room.participants.length}/${room.maxParticipants}`} />
-        {room.inviteEmails.length > 0 && (
-          <span title={room.inviteEmails.join(", ")}>
-            <StatChip icon={Mail} label={`${room.inviteEmails.length} invited`} />
-          </span>
-        )}
-      </div>
-
-      <div className="relative mt-5">
-        {isScheduled && (
-          <Link to={`/app/interview-room/${room.code}`} className="group/btn block">
-            <button
-              type="button"
-              disabled={!room.joinable}
-              className="flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-violet-500 to-purple-600 py-3.5 text-sm font-semibold text-white shadow-[0_8px_24px_-6px_rgba(139,92,246,0.55)] transition-all duration-200 hover:shadow-[0_12px_32px_-6px_rgba(139,92,246,0.75)] hover:scale-[1.02] active:scale-[0.98] disabled:cursor-not-allowed disabled:from-ink-300 disabled:to-ink-300 disabled:opacity-60 disabled:shadow-none disabled:hover:scale-100 dark:disabled:from-ink-700 dark:disabled:to-ink-700"
-            >
-              <LogIn className="h-4 w-4" />
-              Join room
-              <ArrowRight className="h-4 w-4 transition-transform duration-200 group-hover/btn:translate-x-1" />
-            </button>
-          </Link>
-        )}
-        {isCompleted && (
-          <Link to={`/app/interview-room/${room.code}/summary`} className="group/btn block">
-            <button
-              type="button"
-              className="flex w-full items-center justify-center gap-2 rounded-2xl border border-violet-500/20 bg-violet-500/[0.06] py-3.5 text-sm font-semibold text-ink-700 transition-all duration-200 hover:border-violet-400/40 hover:bg-violet-500/10 dark:text-ink-200"
-            >
-              View summary
-              <ArrowRight className="h-4 w-4 transition-transform duration-200 group-hover/btn:translate-x-1" />
-            </button>
-          </Link>
-        )}
-      </div>
-    </div>
+    </Surface>
   );
 }
