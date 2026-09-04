@@ -1,13 +1,15 @@
 import { useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AnimatePresence, motion } from "framer-motion";
-import { Plus, Trash2, Upload } from "lucide-react";
+import { Plus, Search, Trash2, Upload, Users } from "lucide-react";
 import { Button } from "../../components/ui/Button.js";
 import { Input } from "../../components/ui/Input.js";
 import { Card, CardBody } from "../../components/ui/Card.js";
 import { EmptyState } from "../../components/ui/EmptyState.js";
+import { PageHeader } from "../../components/ui/PageHeader.js";
 import { Spinner } from "../../components/ui/Spinner.js";
 import { Badge } from "../../components/ui/Badge.js";
+import { MOTION } from "../../lib/motion.js";
 import { createContact, deleteContact, fetchContacts } from "./contactsApi.js";
 import { ImportContactsDialog } from "./ImportContactsDialog.js";
 
@@ -48,26 +50,26 @@ export function ContactsPage() {
     });
   }
 
+  const hasQuery = search.trim().length > 0;
+
   return (
     <div className="space-y-6">
-      <motion.div
-        initial={{ opacity: 0, y: 8 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.35, ease: "easeOut" }}
-        className="flex items-center justify-between"
-      >
-        <div>
-          <h1 className="text-2xl font-semibold text-ink-900 dark:text-white">Contacts</h1>
-          <p className="text-sm text-ink-500 dark:text-ink-400">Your outreach audience, in one place.</p>
-        </div>
-        <div className="flex gap-2">
-          <Button variant="secondary" onClick={() => setShowImport(true)}>
-            <Upload className="h-4 w-4" /> Import CSV
-          </Button>
-          <Button onClick={() => setShowAddForm((v) => !v)}>
-            <Plus className="h-4 w-4" /> Add contact
-          </Button>
-        </div>
+      <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: MOTION.slow, ease: "easeOut" }}>
+        <PageHeader
+          eyebrow="Outreach"
+          title="Contacts"
+          description="Your outreach audience, in one place."
+          actions={
+            <>
+              <Button variant="secondary" onClick={() => setShowImport(true)}>
+                <Upload className="h-4 w-4" /> Import CSV
+              </Button>
+              <Button onClick={() => setShowAddForm((v) => !v)}>
+                <Plus className="h-4 w-4" /> Add contact
+              </Button>
+            </>
+          }
+        />
       </motion.div>
 
       <AnimatePresence>
@@ -115,60 +117,88 @@ export function ContactsPage() {
         )}
       </AnimatePresence>
 
-      <Input placeholder="Search contacts…" value={search} onChange={(e) => setSearch(e.target.value)} className="max-w-sm" />
-
-      {isLoading ? (
-        <div className="flex h-40 items-center justify-center">
-          <Spinner className="h-6 w-6 text-brand-500" />
+      <Card className="overflow-hidden">
+        <div className="flex items-center gap-3 border-b border-line px-5 py-3.5">
+          <div className="relative max-w-sm flex-1">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-fg-subtle" />
+            <Input
+              placeholder="Search contacts…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="h-9 pl-9"
+            />
+          </div>
+          {!isLoading && data && (
+            <span className="shrink-0 text-caption text-fg-subtle">
+              {data.items.length} contact{data.items.length === 1 ? "" : "s"}
+            </span>
+          )}
         </div>
-      ) : !data || data.items.length === 0 ? (
-        <EmptyState
-          title="No contacts yet."
-          description="Add a contact manually or import a CSV to build your audience."
-        />
-      ) : (
-        <Card className="overflow-hidden">
-          <ul className="divide-y divide-ink-100 dark:divide-ink-800">
+
+        {isLoading ? (
+          <div className="flex h-40 items-center justify-center">
+            <Spinner className="h-6 w-6 text-accent" />
+          </div>
+        ) : !data || data.items.length === 0 ? (
+          hasQuery ? (
+            <div className="px-5 py-14 text-center">
+              <p className="text-label font-medium text-fg">No matches for "{search}"</p>
+              <p className="mt-1 text-caption text-fg-subtle">Try a different name, email, or company.</p>
+            </div>
+          ) : (
+            <EmptyState
+              className="border-none py-14"
+              icon={<Users className="h-8 w-8 text-fg-subtle" />}
+              title="No contacts yet"
+              description="Add a contact manually, or import a CSV to build your outreach audience in one go."
+              action={
+                <Button size="sm" onClick={() => setShowAddForm(true)}>
+                  <Plus className="h-4 w-4" /> Add contact
+                </Button>
+              }
+              secondaryAction={
+                <Button variant="secondary" size="sm" onClick={() => setShowImport(true)}>
+                  <Upload className="h-4 w-4" /> Import CSV
+                </Button>
+              }
+            />
+          )
+        ) : (
+          <ul className="divide-y divide-line">
             {data.items.map((c, i) => (
               <motion.li
                 key={c.id}
                 initial={{ opacity: 0, x: -6 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ duration: 0.25, delay: i * 0.03 }}
-                className="group flex items-center justify-between gap-4 px-5 py-3.5 transition-colors hover:bg-ink-50 dark:hover:bg-ink-800/60"
+                className="group flex items-center justify-between gap-4 px-5 py-3.5 transition-colors hover:bg-fg/[0.03]"
               >
                 <div className="flex min-w-0 items-center gap-3">
-                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand-500/10 text-xs font-semibold text-brand-600 dark:text-brand-300">
+                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-accent-soft text-xs font-semibold text-accent">
                     {c.firstName.charAt(0).toUpperCase()}
                     {c.lastName.charAt(0).toUpperCase()}
                   </span>
                   <div className="min-w-0">
-                    <div className="truncate font-medium text-ink-900 dark:text-white">
+                    <div className="truncate text-sm font-medium text-fg">
                       {c.firstName} {c.lastName}
                     </div>
-                    <div className="truncate text-xs text-ink-400">
+                    <div className="truncate text-xs text-fg-subtle">
                       {c.email}
                       {c.company ? ` · ${c.company}` : ""}
                     </div>
                   </div>
                 </div>
                 <div className="flex shrink-0 items-center gap-3">
-                  <Badge tone={c.subscribed ? "success" : "neutral"}>
-                    {c.subscribed ? "Subscribed" : "Unsubscribed"}
-                  </Badge>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => deleteMutation.mutate(c.id)}
-                  >
+                  <Badge tone={c.subscribed ? "success" : "neutral"}>{c.subscribed ? "Subscribed" : "Unsubscribed"}</Badge>
+                  <Button variant="ghost" size="sm" onClick={() => deleteMutation.mutate(c.id)}>
                     <Trash2 className="h-4 w-4" />
                   </Button>
                 </div>
               </motion.li>
             ))}
           </ul>
-        </Card>
-      )}
+        )}
+      </Card>
 
       {showImport && (
         <ImportContactsDialog

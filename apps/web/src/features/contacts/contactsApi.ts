@@ -1,7 +1,7 @@
 import type { Contact, CreateContactInput, CsvImportSummary, PaginatedResult } from "@believe-ai/shared";
 import { apiClient } from "../../lib/apiClient.js";
 
-export async function fetchContacts(params: { search?: string; page?: number }) {
+export async function fetchContacts(params: { search?: string; page?: number; limit?: number }) {
   const res = await apiClient.get<PaginatedResult<Contact>>("/contacts/", { params });
   return res.data;
 }
