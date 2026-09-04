@@ -24,7 +24,11 @@ from schemas.ai import (
     DesignEditResult,
     DesignGenerateRequest,
     DesignGenerateResult,
+    DesignPromptEnhanceRequest,
+    DesignPromptEnhanceResult,
     ImproveResult,
+    InterviewAnswerFeedbackRequest,
+    InterviewAnswerFeedbackResult,
     InterviewCoachRequest,
     InterviewCoachResult,
     InterviewQuestionsRequest,
@@ -99,6 +103,8 @@ class AiProvider(Protocol):
 
     async def coach_interview(self, req: InterviewCoachRequest) -> InterviewCoachResult: ...
 
+    async def analyze_interview_answer(self, req: InterviewAnswerFeedbackRequest) -> InterviewAnswerFeedbackResult: ...
+
     async def draft_job_post(self, req: JobPostDraftRequest) -> JobPostDraftResult: ...
 
     async def synthesize_company_intel(self, req: CompanyIntelRequest) -> CompanyIntelResult: ...
@@ -126,6 +132,8 @@ class AiProvider(Protocol):
     async def generate_design_screen(self, req: DesignGenerateRequest) -> DesignGenerateResult: ...
 
     async def edit_design_screen(self, req: DesignEditRequest) -> DesignEditResult: ...
+
+    async def enhance_design_prompt(self, req: DesignPromptEnhanceRequest) -> DesignPromptEnhanceResult: ...
 
     async def embed_texts(self, texts: list[str], input_type: str | None = None) -> list[list[float]]:
         """Not every backend has an embeddings endpoint (Groq has none at

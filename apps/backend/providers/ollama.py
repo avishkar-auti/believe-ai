@@ -5,13 +5,14 @@ import httpx
 from prompts.base import SYSTEM_INSTRUCTION
 from prompts.career import (
     build_career_fit_prompt,
+    build_interview_answer_feedback_prompt,
     build_interview_coach_prompt,
     build_interview_questions_prompt,
     build_resume_chat_prompt,
     build_roadmap_prompt,
     build_skill_extraction_prompt,
 )
-from prompts.design import build_design_edit_prompt, build_design_generate_prompt
+from prompts.design import build_design_edit_prompt, build_design_generate_prompt, build_design_prompt_enhance_prompt
 from prompts.email import (
     build_campaign_insight_prompt,
     build_email_generation_prompt,
@@ -53,7 +54,11 @@ from schemas.ai import (
     DesignEditResult,
     DesignGenerateRequest,
     DesignGenerateResult,
+    DesignPromptEnhanceRequest,
+    DesignPromptEnhanceResult,
     ImproveResult,
+    InterviewAnswerFeedbackRequest,
+    InterviewAnswerFeedbackResult,
     InterviewCoachRequest,
     InterviewCoachResult,
     InterviewQuestionsRequest,
@@ -187,6 +192,10 @@ class OllamaProvider:
         text = await self._chat(build_interview_coach_prompt(req))
         return parse_and_validate_json(self.id, text, InterviewCoachResult)
 
+    async def analyze_interview_answer(self, req: InterviewAnswerFeedbackRequest) -> InterviewAnswerFeedbackResult:
+        text = await self._chat(build_interview_answer_feedback_prompt(req))
+        return parse_and_validate_json(self.id, text, InterviewAnswerFeedbackResult)
+
     async def draft_job_post(self, req: JobPostDraftRequest) -> JobPostDraftResult:
         text = await self._chat(build_job_post_draft_prompt(req))
         return parse_and_validate_json(self.id, text, JobPostDraftResult)
@@ -242,6 +251,10 @@ class OllamaProvider:
     async def edit_design_screen(self, req: DesignEditRequest) -> DesignEditResult:
         text = await self._chat(build_design_edit_prompt(req))
         return parse_and_validate_json(self.id, text, DesignEditResult)
+
+    async def enhance_design_prompt(self, req: DesignPromptEnhanceRequest) -> DesignPromptEnhanceResult:
+        text = await self._chat(build_design_prompt_enhance_prompt(req))
+        return parse_and_validate_json(self.id, text, DesignPromptEnhanceResult)
 
     async def embed_texts(self, texts: list[str], input_type: str | None = None) -> list[list[float]]:
         # Ollama's local embedding models are symmetric — no query/passage distinction.
