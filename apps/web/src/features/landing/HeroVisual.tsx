@@ -115,7 +115,6 @@ export function HeroVisual() {
           ))}
         </div>
 
-        {/* Bars + trend line */}
         <div className="relative px-6 pb-6 pt-8">
           <div className="flex h-32 items-end justify-between gap-2 sm:gap-3">
             {bars.map((h, i) => (
