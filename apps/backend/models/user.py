@@ -21,18 +21,22 @@ class User(Document):
     email: str
     name: str = ""
     avatar: str | None = None
+    coverImage: str | None = None
     company: str | None = None
     jobTitle: str | None = None
+    location: str | None = None
     timezone: str = "UTC"
     role: UserRole = "user"
     plan: PlanTier = "FREE"
     onboardingCompleted: bool = False
+    aiRecommendationsEnabled: bool = True
 
     # Believe Identity / public profile — additive, all optional/defaulted so
     # every existing document stays valid without a migration.
     username: str | None = None
     headline: str | None = None
     bio: str | None = None
+    about: str | None = None
     socialLinks: dict[str, str] = Field(default_factory=dict)
     publicProfileEnabled: bool = False
     cardTheme: CardTheme = "minimal"

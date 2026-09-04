@@ -17,15 +17,19 @@ export interface User {
   email: string;
   name: string;
   avatar: string | null;
+  coverImage: string | null;
   company: string | null;
   jobTitle: string | null;
+  location: string | null;
   timezone: string;
   role: UserRole;
   plan: PlanTier;
   onboardingCompleted: boolean;
+  aiRecommendationsEnabled: boolean;
   username: string | null;
   headline: string | null;
   bio: string | null;
+  about: string | null;
   socialLinks: Partial<Record<SocialLinkKey, string>>;
   publicProfileEnabled: boolean;
   cardTheme: CardTheme;
@@ -37,12 +41,15 @@ export interface UpdateProfileInput {
   name?: string;
   company?: string | null;
   jobTitle?: string | null;
+  location?: string | null;
   timezone?: string;
   onboardingCompleted?: boolean;
+  aiRecommendationsEnabled?: boolean;
   role?: "user" | "recruiter";
   username?: string | null;
   headline?: string | null;
   bio?: string | null;
+  about?: string | null;
   socialLinks?: Partial<Record<SocialLinkKey, string>>;
   publicProfileEnabled?: boolean;
   cardTheme?: CardTheme;
@@ -57,6 +64,7 @@ export interface PublicProfile {
   avatar: string | null;
   headline: string | null;
   bio: string | null;
+  location: string | null;
   socialLinks: Partial<Record<SocialLinkKey, string>>;
   cardTheme: CardTheme;
 }

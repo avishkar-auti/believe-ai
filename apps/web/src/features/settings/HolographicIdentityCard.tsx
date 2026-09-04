@@ -3,6 +3,7 @@ import { Github, Globe, Linkedin, RotateCw, Twitter } from "lucide-react";
 import { animate, motion, useMotionTemplate, useMotionValue, useSpring, useTransform } from "framer-motion";
 import type { SocialLinkKey } from "@believe-ai/shared";
 import { cn } from "../../lib/cn.js";
+import { resolveProfileImageUrl } from "../../lib/profileImage.js";
 import type { IdentityCardProfile } from "./IdentityCard.js";
 
 const SOCIAL_LABELS: Record<SocialLinkKey, string> = {
@@ -86,6 +87,7 @@ export const HolographicIdentityCard = forwardRef<HTMLDivElement, { profile: Ide
       .join("")
       .toUpperCase();
     const summary = profile.headline || profile.bio;
+    const avatarUrl = resolveProfileImageUrl(profile.avatar);
 
     const links = (Object.entries(profile.socialLinks) as [SocialLinkKey, string][])
       .filter(([, url]) => url)
@@ -112,8 +114,8 @@ export const HolographicIdentityCard = forwardRef<HTMLDivElement, { profile: Ide
             <div className="relative flex h-full flex-col items-center justify-between p-6 text-center">
               <div className="flex flex-1 flex-col items-center justify-center">
                 <div className="h-28 w-28 overflow-hidden rounded-full ring-4 ring-white/20 shadow-lg sm:h-32 sm:w-32">
-                  {profile.avatar ? (
-                    <img src={profile.avatar} alt={profile.name} className="h-full w-full object-cover" />
+                  {avatarUrl ? (
+                    <img src={avatarUrl} alt={profile.name} className="h-full w-full object-cover" />
                   ) : (
                     <span className="flex h-full w-full items-center justify-center bg-gradient-to-br from-brand-500 to-fuchsia-600 text-3xl font-semibold text-white">
                       {initials || "?"}

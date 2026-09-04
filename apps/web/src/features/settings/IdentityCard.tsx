@@ -2,6 +2,7 @@ import { forwardRef } from "react";
 import { Github, Globe, Linkedin, Twitter } from "lucide-react";
 import type { CardTheme, SocialLinkKey } from "@believe-ai/shared";
 import { cn } from "../../lib/cn.js";
+import { resolveProfileImageUrl } from "../../lib/profileImage.js";
 
 export interface IdentityCardProfile {
   name: string;
@@ -77,6 +78,7 @@ export const IdentityCard = forwardRef<HTMLDivElement, { profile: IdentityCardPr
       .slice(0, 2)
       .join("")
       .toUpperCase();
+    const avatarUrl = resolveProfileImageUrl(profile.avatar);
 
     return (
       <div
@@ -95,8 +97,8 @@ export const IdentityCard = forwardRef<HTMLDivElement, { profile: IdentityCardPr
 
         <div className="relative flex flex-col items-center">
           <div className={cn("flex h-20 w-20 items-center justify-center overflow-hidden rounded-full ring-4", t.avatarRing)}>
-            {profile.avatar ? (
-              <img src={profile.avatar} alt={profile.name} className="h-full w-full object-cover" />
+            {avatarUrl ? (
+              <img src={avatarUrl} alt={profile.name} className="h-full w-full object-cover" />
             ) : (
               <span className="flex h-full w-full items-center justify-center bg-gradient-to-br from-brand-500 to-brand-700 text-xl font-semibold text-white">
                 {initials || "?"}

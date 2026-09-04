@@ -1,12 +1,15 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { UNLIMITED, type UpdateUserContextInput, type User } from "@believe-ai/shared";
-import { Sparkles } from "lucide-react";
-import { Card, CardBody } from "../../components/ui/Card.js";
+import { ArrowRight, Sparkles } from "lucide-react";
+import { Link } from "react-router-dom";
+import { Card, CardBody, CardHeader } from "../../components/ui/Card.js";
 import { Input } from "../../components/ui/Input.js";
 import { Textarea } from "../../components/ui/Textarea.js";
 import { Button } from "../../components/ui/Button.js";
 import { Badge } from "../../components/ui/Badge.js";
+import { Toggle } from "../../components/ui/Toggle.js";
+import { PageHeader } from "../../components/ui/PageHeader.js";
 import { apiClient } from "../../lib/apiClient.js";
 import { useCurrentUser } from "../../hooks/useCurrentUser.js";
 import { fetchBelieveProfile, updateBelieveProfile } from "./believeProfileApi.js";
@@ -56,28 +59,29 @@ export function ProfileSettingsPage() {
   }
 
   return (
-    <div className="max-w-lg space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold text-ink-900 dark:text-white">Profile</h1>
-        <p className="text-sm text-ink-500 dark:text-ink-400">Your default sender information for outreach.</p>
-      </div>
+    <div className="max-w-2xl space-y-6">
+      <PageHeader
+        eyebrow="Settings"
+        title="Account"
+        description="Sender defaults for outreach and the AI writer."
+        actions={
+          <Link to="/app/profile" className="inline-flex items-center gap-1.5 text-sm font-medium text-accent hover:underline">
+            Edit your public profile <ArrowRight className="h-3.5 w-3.5" />
+          </Link>
+        }
+      />
 
       <Card>
+        <CardHeader>
+          <h2 className="text-h3 text-fg">Basic information</h2>
+        </CardHeader>
         <CardBody>
-          <form className="space-y-3" onSubmit={handleSubmit}>
-            <label className="block text-sm text-ink-600 dark:text-ink-300">
+          <form className="grid grid-cols-1 gap-4 sm:grid-cols-2" onSubmit={handleSubmit}>
+            <label className="block text-sm text-fg-muted">
               Name
               <Input className="mt-1" value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} />
             </label>
-            <label className="block text-sm text-ink-600 dark:text-ink-300">
-              Company
-              <Input
-                className="mt-1"
-                value={form.company}
-                onChange={(e) => setForm((f) => ({ ...f, company: e.target.value }))}
-              />
-            </label>
-            <label className="block text-sm text-ink-600 dark:text-ink-300">
+            <label className="block text-sm text-fg-muted">
               Job title
               <Input
                 className="mt-1"
@@ -85,7 +89,15 @@ export function ProfileSettingsPage() {
                 onChange={(e) => setForm((f) => ({ ...f, jobTitle: e.target.value }))}
               />
             </label>
-            <label className="block text-sm text-ink-600 dark:text-ink-300">
+            <label className="block text-sm text-fg-muted">
+              Company
+              <Input
+                className="mt-1"
+                value={form.company}
+                onChange={(e) => setForm((f) => ({ ...f, company: e.target.value }))}
+              />
+            </label>
+            <label className="block text-sm text-fg-muted">
               Timezone
               <Input
                 className="mt-1"
@@ -93,18 +105,49 @@ export function ProfileSettingsPage() {
                 onChange={(e) => setForm((f) => ({ ...f, timezone: e.target.value }))}
               />
             </label>
-            <Button type="submit" disabled={updateMutation.isPending}>
-              {updateMutation.isPending ? "Saving…" : "Save changes"}
-            </Button>
-            {updateMutation.isSuccess && <p className="text-sm text-lime-600">Saved.</p>}
+            <div className="flex items-center gap-3 sm:col-span-2">
+              <Button type="submit" disabled={updateMutation.isPending}>
+                {updateMutation.isPending ? "Saving…" : "Save changes"}
+              </Button>
+              {updateMutation.isSuccess && <p className="text-sm text-positive">Saved.</p>}
+            </div>
           </form>
         </CardBody>
       </Card>
 
       <BelieveProfileCard />
+      <AiRecommendationsCard user={user} />
       <RecruiterModeCard user={user} />
       <PlanUsageCard />
     </div>
+  );
+}
+
+function AiRecommendationsCard({ user }: { user: User | undefined }) {
+  const queryClient = useQueryClient();
+
+  const toggleMutation = useMutation({
+    mutationFn: async (next: boolean) => {
+      const res = await apiClient.patch<User>("/auth/me", { aiRecommendationsEnabled: next });
+      return res.data;
+    },
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["auth", "me"] }),
+  });
+
+  return (
+    <Card>
+      <CardBody className="flex items-center justify-between gap-4">
+        <div>
+          <h2 className="font-medium text-fg">AI recommendations</h2>
+          <p className="text-sm text-fg-muted">Get smarter suggestions and insights across the workspace.</p>
+        </div>
+        <Toggle
+          checked={user?.aiRecommendationsEnabled ?? true}
+          onChange={(v) => toggleMutation.mutate(v)}
+          label="AI recommendations"
+        />
+      </CardBody>
+    </Card>
   );
 }
 
@@ -124,10 +167,8 @@ function RecruiterModeCard({ user }: { user: User | undefined }) {
     <Card>
       <CardBody className="flex items-center justify-between gap-4">
         <div>
-          <h2 className="font-medium text-ink-900 dark:text-white">Recruiter mode</h2>
-          <p className="text-sm text-ink-500 dark:text-ink-400">
-            Post and manage job listings on the Job Board.
-          </p>
+          <h2 className="font-medium text-fg">Recruiter mode</h2>
+          <p className="text-sm text-fg-muted">Post and manage job listings on the Job Board.</p>
         </div>
         <Button
           variant={isRecruiter ? "secondary" : "primary"}
@@ -156,7 +197,7 @@ function PlanUsageCard() {
     <Card>
       <CardBody>
         <div className="mb-4 flex items-center justify-between">
-          <h2 className="font-medium text-ink-900 dark:text-white">Plan &amp; usage</h2>
+          <h2 className="font-medium text-fg">Plan &amp; usage</h2>
           <Badge tone="info">{usage.plan}</Badge>
         </div>
 
@@ -169,15 +210,15 @@ function PlanUsageCard() {
             return (
               <div key={label}>
                 <div className="flex items-baseline justify-between text-sm">
-                  <span className="text-ink-700 dark:text-ink-200">{label}</span>
-                  <span className={atLimit ? "font-medium text-red-600" : "text-ink-500 dark:text-ink-400"}>
+                  <span className="text-fg">{label}</span>
+                  <span className={atLimit ? "font-medium text-critical" : "text-fg-muted"}>
                     {used.toLocaleString()} / {unlimited ? "unlimited" : limit.toLocaleString()}
                   </span>
                 </div>
                 {!unlimited && (
-                  <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-ink-100 dark:bg-ink-800">
+                  <div className="mt-1 h-1.5 w-full overflow-hidden rounded-pill bg-surface-2">
                     <div
-                      className={atLimit ? "h-full bg-red-500" : "h-full bg-brand-500"}
+                      className={atLimit ? "h-full bg-critical" : "h-full bg-accent"}
                       style={{ width: `${percent}%` }}
                     />
                   </div>
@@ -216,14 +257,16 @@ function BelieveProfileCard() {
 
   return (
     <Card>
-      <CardBody>
-        <div className="mb-1 flex items-center gap-2">
-          <Sparkles className="h-4 w-4 text-brand-500" />
-          <h2 className="font-medium text-ink-900 dark:text-white">Believe Profile</h2>
+      <CardHeader>
+        <div className="flex items-center gap-2">
+          <Sparkles className="h-4 w-4 text-accent" />
+          <h2 className="text-h3 text-fg">Believe Profile</h2>
         </div>
-        <p className="mb-4 text-sm text-ink-500 dark:text-ink-400">
+        <p className="mt-1 text-sm text-fg-muted">
           Used automatically by the AI Writer and personalization so your emails reference your real situation.
         </p>
+      </CardHeader>
+      <CardBody>
         <form
           className="space-y-3"
           onSubmit={(e) => {
@@ -232,7 +275,7 @@ function BelieveProfileCard() {
           }}
         >
           {PROFILE_FIELDS.map(({ key, label, placeholder }) => (
-            <label key={key} className="block text-sm text-ink-600 dark:text-ink-300">
+            <label key={key} className="block text-sm text-fg-muted">
               {label}
               <Textarea
                 className="mt-1"
@@ -246,7 +289,7 @@ function BelieveProfileCard() {
           <Button type="submit" disabled={updateMutation.isPending}>
             {updateMutation.isPending ? "Saving…" : "Save profile"}
           </Button>
-          {updateMutation.isSuccess && <p className="text-sm text-lime-600">Saved.</p>}
+          {updateMutation.isSuccess && <p className="text-sm text-positive">Saved.</p>}
         </form>
       </CardBody>
     </Card>

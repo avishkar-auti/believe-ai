@@ -56,15 +56,19 @@ class UserDto(BaseModel):
     email: str
     name: str
     avatar: str | None
+    coverImage: str | None
     company: str | None
     jobTitle: str | None
+    location: str | None
     timezone: str
     role: UserRole
     plan: PlanTier
     onboardingCompleted: bool
+    aiRecommendationsEnabled: bool
     username: str | None
     headline: str | None
     bio: str | None
+    about: str | None
     socialLinks: dict[str, str]
     publicProfileEnabled: bool
     cardTheme: CardTheme
@@ -76,8 +80,10 @@ class UpdateProfileInput(BaseModel):
     name: str | None = Field(default=None, min_length=1)
     company: str | None = None
     jobTitle: str | None = None
+    location: str | None = None
     timezone: str | None = Field(default=None, min_length=1)
     onboardingCompleted: bool | None = None
+    aiRecommendationsEnabled: bool | None = None
     # Deliberately excludes "admin" — self-serve role changes can only ever
     # grant/revoke the recruiter posting privilege, never elevate to admin.
     role: Literal["user", "recruiter"] | None = None
@@ -85,6 +91,7 @@ class UpdateProfileInput(BaseModel):
     username: str | None = None
     headline: str | None = Field(default=None, max_length=120)
     bio: str | None = Field(default=None, max_length=280)
+    about: str | None = Field(default=None, max_length=2000)
     socialLinks: dict[str, str] | None = None
     publicProfileEnabled: bool | None = None
     cardTheme: CardTheme | None = None
@@ -119,5 +126,7 @@ class PublicProfileDto(BaseModel):
     avatar: str | None
     headline: str | None
     bio: str | None
+    about: str | None
+    location: str | None
     socialLinks: dict[str, str]
     cardTheme: CardTheme

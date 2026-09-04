@@ -21,18 +21,41 @@ async def find_by_username(username: str) -> User | None:
     return await User.find_one(User.username == username)
 
 
+async def set_avatar(user_id: ObjectId, url: str | None) -> User | None:
+    user = await User.get(user_id)
+    if not user:
+        return None
+    user.avatar = url
+    user.updatedAt = datetime.now(UTC)
+    await user.save()
+    return user
+
+
+async def set_cover_image(user_id: ObjectId, url: str | None) -> User | None:
+    user = await User.get(user_id)
+    if not user:
+        return None
+    user.coverImage = url
+    user.updatedAt = datetime.now(UTC)
+    await user.save()
+    return user
+
+
 async def update_profile(
     user_id: ObjectId,
     *,
     name: str | None = None,
     company: str | None = ...,  # type: ignore[assignment]
     job_title: str | None = ...,  # type: ignore[assignment]
+    location: str | None = ...,  # type: ignore[assignment]
     timezone: str | None = None,
     onboarding_completed: bool | None = None,
+    ai_recommendations_enabled: bool | None = None,
     role: str | None = None,
     username: str | None = ...,  # type: ignore[assignment]
     headline: str | None = ...,  # type: ignore[assignment]
     bio: str | None = ...,  # type: ignore[assignment]
+    about: str | None = ...,  # type: ignore[assignment]
     social_links: dict[str, str] | None = None,
     public_profile_enabled: bool | None = None,
     card_theme: CardTheme | None = None,
@@ -50,10 +73,14 @@ async def update_profile(
         user.company = company
     if job_title is not ...:
         user.jobTitle = job_title
+    if location is not ...:
+        user.location = location
     if timezone is not None:
         user.timezone = timezone
     if onboarding_completed is not None:
         user.onboardingCompleted = onboarding_completed
+    if ai_recommendations_enabled is not None:
+        user.aiRecommendationsEnabled = ai_recommendations_enabled
     if role is not None:
         user.role = role  # type: ignore[assignment]
     if username is not ...:
@@ -62,6 +89,8 @@ async def update_profile(
         user.headline = headline
     if bio is not ...:
         user.bio = bio
+    if about is not ...:
+        user.about = about
     if social_links is not None:
         user.socialLinks = social_links
     if public_profile_enabled is not None:
