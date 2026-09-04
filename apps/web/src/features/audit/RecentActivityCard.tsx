@@ -50,23 +50,21 @@ export function RecentActivityCard() {
   return (
     <Card>
       <CardBody>
-        <h2 className="mb-3 font-medium text-ink-900 dark:text-white">Recent activity</h2>
+        <h2 className="mb-3 font-medium text-fg">Recent activity</h2>
 
         {!data || data.items.length === 0 ? (
-          <p className="text-sm text-ink-500 dark:text-ink-400">
-            Your account activity will show up here as you work.
-          </p>
+          <p className="text-sm text-fg-muted">Your account activity will show up here as you work.</p>
         ) : (
-          <ul className="divide-y divide-ink-100 text-sm dark:divide-ink-800">
+          <ul className="divide-y divide-line text-sm">
             {data.items.map((log) => {
               const detail = describe(log);
               return (
                 <li key={log.id} className="flex items-center justify-between gap-3 py-2">
-                  <span className="text-ink-800 dark:text-ink-100">
+                  <span className="text-fg">
                     {ACTION_LABELS[log.action] ?? log.action}
-                    {detail && <span className="ml-2 text-ink-400">{detail}</span>}
+                    {detail && <span className="ml-2 text-fg-subtle">{detail}</span>}
                   </span>
-                  <span className="shrink-0 text-xs text-ink-400">{timeAgo(log.createdAt)}</span>
+                  <span className="shrink-0 text-xs text-fg-subtle">{timeAgo(log.createdAt)}</span>
                 </li>
               );
             })}

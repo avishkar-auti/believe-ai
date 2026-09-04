@@ -16,7 +16,12 @@ from repositories import template_repository
 from schemas.template import CreateTemplateInput, TemplateDto, UpdateTemplateInput
 
 _ALLOWED_TAGS = {"p", "br", "b", "strong", "i", "em", "u", "a", "ul", "ol", "li", "span", "div"}
-_ALLOWED_ATTRIBUTES = {"a": {"href", "target", "rel"}}
+# "rel" is deliberately absent here — nh3 auto-adds rel="noopener noreferrer"
+# to every <a> itself (its link_rel param, on by default). Also listing "rel"
+# in the allowlist hits an nh3/ammonia panic: "if rel is in the generic or
+# tag attributes, link_rel must be set to None" (nh3.clean's own docstring) —
+# this was silently 500-ing every template save that reached sanitization.
+_ALLOWED_ATTRIBUTES = {"a": {"href", "target"}}
 _INTERPOLATE_PATTERN = re.compile(r"{{\s*(\w+)\s*}}")
 
 
