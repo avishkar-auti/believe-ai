@@ -8,7 +8,7 @@ from typing import Literal
 
 from pydantic import BaseModel, EmailStr, Field
 
-from models.contact import ContactSource
+from models.contact import ContactOutreachChannel, ContactSource
 
 CsvImportRowErrorReason = Literal["invalid_email", "duplicate_email", "missing_email", "unsubscribed"]
 
@@ -26,6 +26,7 @@ class ContactDto(BaseModel):
     notes: str | None
     source: ContactSource
     subscribed: bool
+    outreachChannel: ContactOutreachChannel
     createdAt: str
     updatedAt: str
 

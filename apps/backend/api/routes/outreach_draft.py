@@ -18,7 +18,13 @@ async def generate_drafts_route(
     body: GenerateDraftsInput, mongo_user_id: MongoUserIdDep, _user_id: UserIdDep, settings: SettingsDep, db: DbDep
 ) -> list[OutreachDraftDto]:
     result = await outreach_draft_service.generate(
-        settings, db, mongo_user_id, PydanticObjectId(body.jobIntelId), [PydanticObjectId(c) for c in body.contactIds]
+        settings,
+        db,
+        mongo_user_id,
+        PydanticObjectId(body.jobIntelId),
+        [PydanticObjectId(c) for c in body.contactIds],
+        PydanticObjectId(body.resumeId) if body.resumeId else None,
+        body.intent,
     )
     await audit_service.record(mongo_user_id, "outreach_draft.generated", "outreach_draft", entity_id=body.jobIntelId)
     return result

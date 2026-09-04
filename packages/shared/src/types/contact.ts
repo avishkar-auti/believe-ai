@@ -2,6 +2,9 @@
  * Canonical Contact type shared between the API and the web client.
  */
 export type ContactSource = "manual" | "csv_import" | "api";
+// "linkedin" = added from a discovered job lead for the LinkedIn message
+// only — email is a generated placeholder, never a real address.
+export type ContactOutreachChannel = "email" | "linkedin";
 
 export interface Contact {
   id: string;
@@ -16,6 +19,7 @@ export interface Contact {
   notes: string | null;
   source: ContactSource;
   subscribed: boolean;
+  outreachChannel: ContactOutreachChannel;
   createdAt: string;
   updatedAt: string;
 }

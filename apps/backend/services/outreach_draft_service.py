@@ -17,7 +17,7 @@ from core.errors import NotFoundError, ValidationError
 from models.outreach_draft import OutreachDraft
 from models.user import User
 from repositories import contact_repository, job_intel_repository, outreach_draft_repository, resumes_repository
-from schemas.ai import OutreachDraftRequest
+from schemas.ai import OutreachDraftIntent, OutreachDraftRequest
 from schemas.outreach_draft import DecidableDraftStatus, OutreachDraftDto, OutreachDraftEditedTextInput
 from services.outreach_hook import compute_matching_skills, compute_outreach_hook
 
@@ -62,7 +62,13 @@ def _truncate_linkedin_note(text: str) -> str:
 
 
 async def generate(
-    settings: Settings, db: AsyncIOMotorDatabase, user_id: ObjectId, job_intel_id: ObjectId, contact_ids: list[ObjectId]
+    settings: Settings,
+    db: AsyncIOMotorDatabase,
+    user_id: ObjectId,
+    job_intel_id: ObjectId,
+    contact_ids: list[ObjectId],
+    resume_id: ObjectId | None = None,
+    intent: OutreachDraftIntent = "outreach",
 ) -> list[OutreachDraftDto]:
     if not contact_ids:
         raise ValidationError("Select at least one contact")
@@ -75,7 +81,7 @@ async def generate(
     if len(contacts) != len(contact_ids):
         raise NotFoundError("One or more contacts not found")
 
-    resume, user = await resumes_repository.find_by_user_id(db, user_id), await User.get(user_id)
+    resume, user = await resumes_repository.resolve_for_user(db, user_id, resume_id), await User.get(user_id)
 
     outreach_hook = compute_outreach_hook(job_intel.company, job_intel.skills, job_intel.companyIntel)
     matching_skills = compute_matching_skills(job_intel.skills, (resume or {}).get("content"))
@@ -94,6 +100,7 @@ async def generate(
                 matchingSkills=matching_skills,
                 candidateName=user.name if user else None,
                 includeCoverLetter=include_cover_letter,
+                intent=intent,
             ),
         )
         assert contact.id is not None
@@ -107,6 +114,7 @@ async def generate(
                 hookConfidence=outreach_hook.confidence,
                 coldEmail=ai.coldEmail,
                 linkedinNote=_truncate_linkedin_note(ai.linkedinNote),
+                referralRequest=ai.referralRequest,
                 # OutreachDraftResult has no coverLetter field yet — matches
                 # today's actual Node behavior (includeCoverLetter is sent to
                 # the model but never comes back structured), not a regression.

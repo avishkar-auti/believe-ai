@@ -1,12 +1,14 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Check, ChevronDown, Clock, Linkedin, Mail, Pencil, Send, Sparkles, X } from "lucide-react";
+import { Check, ChevronDown, Clock, Linkedin, Mail, Pencil, Send, Sparkles, UserCheck, X } from "lucide-react";
 import type { DraftStatus, OutreachDraft, OutreachSendStatus } from "@believe-ai/shared";
 import { Button } from "../../components/ui/Button.js";
 import { Card, CardBody } from "../../components/ui/Card.js";
 import { Badge } from "../../components/ui/Badge.js";
 import { Spinner } from "../../components/ui/Spinner.js";
+import { Select } from "../../components/ui/Select.js";
 import { fetchContacts } from "../contacts/contactsApi.js";
+import { fetchResumes } from "../resumes/resumeApi.js";
 import { decideOutreachDraft, fetchOutreachDrafts, generateOutreachDrafts } from "./outreachDraftApi.js";
 import { fetchOutreachFollowUps, fetchOutreachSendLogs, markOutreachReplied, sendOutreachDraft } from "./outreachSendApi.js";
 
@@ -28,6 +30,7 @@ export function OutreachDraftPanel({ jobIntelId }: { jobIntelId: string }) {
   const [open, setOpen] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [selectedContactIds, setSelectedContactIds] = useState<string[]>([]);
+  const [resumeId, setResumeId] = useState("");
   const queryClient = useQueryClient();
 
   const draftsQuery = useQuery({
@@ -42,8 +45,11 @@ export function OutreachDraftPanel({ jobIntelId }: { jobIntelId: string }) {
     enabled: pickerOpen,
   });
 
+  const resumesQuery = useQuery({ queryKey: ["resumes"], queryFn: fetchResumes, enabled: pickerOpen });
+  const selectedResumeId = resumeId || resumesQuery.data?.find((r) => r.isPrimary)?.id;
+
   const generateMutation = useMutation({
-    mutationFn: () => generateOutreachDrafts(jobIntelId, selectedContactIds),
+    mutationFn: () => generateOutreachDrafts(jobIntelId, selectedContactIds, selectedResumeId),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["outreachDrafts", jobIntelId] });
       setPickerOpen(false);
@@ -101,6 +107,18 @@ export function OutreachDraftPanel({ jobIntelId }: { jobIntelId: string }) {
                     ))}
                   </div>
                 )}
+                {resumesQuery.data && resumesQuery.data.length > 1 && (
+                  <label className="flex items-center gap-2 text-xs text-ink-600 dark:text-ink-300">
+                    Resume
+                    <Select className="!h-8 flex-1 text-xs" value={selectedResumeId ?? ""} onChange={(e) => setResumeId(e.target.value)}>
+                      {resumesQuery.data.map((r) => (
+                        <option key={r.id} value={r.id}>
+                          {(r.targetRole ?? r.fileName) + (r.isPrimary ? " (Primary)" : "")}
+                        </option>
+                      ))}
+                    </Select>
+                  </label>
+                )}
                 <div className="flex items-center gap-2">
                   <Button
                     size="sm"
@@ -137,11 +155,16 @@ function DraftCard({ draft, jobIntelId }: { draft: OutreachDraft; jobIntelId: st
   const [editing, setEditing] = useState(false);
   const [coldEmail, setColdEmail] = useState(draft.editedText?.coldEmail ?? draft.coldEmail);
   const [linkedinNote, setLinkedinNote] = useState(draft.editedText?.linkedinNote ?? draft.linkedinNote);
+  const [referralRequest, setReferralRequest] = useState(draft.editedText?.referralRequest ?? draft.referralRequest ?? "");
   const queryClient = useQueryClient();
 
   const decideMutation = useMutation({
     mutationFn: (status: DraftStatus) =>
-      decideOutreachDraft(draft.id, status, status === "edited" ? { coldEmail, linkedinNote } : null),
+      decideOutreachDraft(
+        draft.id,
+        status,
+        status === "edited" ? { coldEmail, linkedinNote, referralRequest: referralRequest || undefined } : null,
+      ),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["outreachDrafts", jobIntelId] });
       setEditing(false);
@@ -150,6 +173,7 @@ function DraftCard({ draft, jobIntelId }: { draft: OutreachDraft; jobIntelId: st
 
   const shownColdEmail = draft.editedText?.coldEmail ?? draft.coldEmail;
   const shownLinkedinNote = draft.editedText?.linkedinNote ?? draft.linkedinNote;
+  const shownReferralRequest = draft.editedText?.referralRequest ?? draft.referralRequest;
 
   return (
     <Card>
@@ -165,6 +189,19 @@ function DraftCard({ draft, jobIntelId }: { draft: OutreachDraft; jobIntelId: st
 
         {editing ? (
           <div className="space-y-2">
+            {(shownReferralRequest || draft.referralRequest !== null) && (
+              <div>
+                <p className="mb-1 flex items-center gap-1 text-xs font-semibold uppercase tracking-wider text-ink-400">
+                  <UserCheck className="h-3 w-3" /> Referral request
+                </p>
+                <textarea
+                  value={referralRequest}
+                  onChange={(e) => setReferralRequest(e.target.value)}
+                  rows={5}
+                  className="w-full rounded-xl border border-ink-200 bg-white p-3 text-sm text-ink-900 focus:border-ink-900 focus:outline-none dark:border-ink-700 dark:bg-ink-800 dark:text-ink-50"
+                />
+              </div>
+            )}
             <div>
               <p className="mb-1 flex items-center gap-1 text-xs font-semibold uppercase tracking-wider text-ink-400">
                 <Mail className="h-3 w-3" /> Cold email
@@ -190,6 +227,14 @@ function DraftCard({ draft, jobIntelId }: { draft: OutreachDraft; jobIntelId: st
           </div>
         ) : (
           <div className="space-y-2">
+            {shownReferralRequest && (
+              <div>
+                <p className="mb-1 flex items-center gap-1 text-xs font-semibold uppercase tracking-wider text-ink-400">
+                  <UserCheck className="h-3 w-3" /> Referral request
+                </p>
+                <p className="whitespace-pre-wrap text-sm text-ink-700 dark:text-ink-300">{shownReferralRequest}</p>
+              </div>
+            )}
             <div>
               <p className="mb-1 flex items-center gap-1 text-xs font-semibold uppercase tracking-wider text-ink-400">
                 <Mail className="h-3 w-3" /> Cold email

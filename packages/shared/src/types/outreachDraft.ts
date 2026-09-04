@@ -7,6 +7,9 @@
  */
 export type DraftStatus = "pending" | "approved" | "edited" | "rejected";
 export type HookConfidence = "high" | "low";
+/** "referral" assumes an existing connection and asks for a referral instead
+ * of the standard cold-email/connection-note pair. */
+export type OutreachDraftIntent = "outreach" | "referral";
 
 export interface OutreachDraftEditedText {
   coldEmail?: string;

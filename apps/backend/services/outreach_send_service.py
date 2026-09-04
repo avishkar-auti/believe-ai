@@ -106,6 +106,13 @@ async def send(settings: Settings, user_id: ObjectId, draft_id: ObjectId) -> Sen
     if not linkedin_log:
         linkedin_log = await outreach_send_log_repository.create(user_id, draft.id, draft.contactId, "linkedin", "drafted", "linkedin_note")
 
+    # LinkedIn-only contacts (added without a real email — see
+    # lead_discovery_service.add_to_contacts) have nothing to email: their
+    # address is a generated placeholder, never a real inbox. The LinkedIn
+    # note above is the entire point of sending for these, so stop here.
+    if contact.outreachChannel == "linkedin":
+        return SendResult(sendLogs=[_log_to_dto(linkedin_log)])
+
     still_unsubscribed = not contact.subscribed or bool(await unsubscribe_repository.find_unsubscribed_emails(user_id, [contact.email]))
     if still_unsubscribed:
         suppressed_log = await outreach_send_log_repository.create(

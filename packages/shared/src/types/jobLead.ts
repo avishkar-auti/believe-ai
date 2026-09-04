@@ -7,14 +7,27 @@
  * address, so a JobLead can only become a real, sendable Contact through an
  * explicit "add to contacts" step where the user supplies a real email.
  */
+export type RelationshipStatus = "connected" | "not_connected" | "unknown";
+
 export interface JobLead {
   id: string;
   userId: string;
   jobIntelId: string;
   name: string;
   title: string | null;
+  /** The original headline text a profile was found with — kept separate
+   * from `title` for debugging, even though today they're the same value. */
+  headline: string | null;
+  location: string | null;
   linkedinUrl: string | null;
   relevanceRank: number;
+  /** 0-100, explainable — see relevanceReasons for what produced it. */
+  relevanceScore: number;
+  relevanceReasons: string[];
+  /** Always "unknown" today — no LinkedIn integration can honestly return
+   * "connected"/"not_connected" without partner-tier API access. See
+   * services/relationship_service.py. */
+  relationshipStatus: RelationshipStatus;
   warmPath: boolean;
   /** The real, verifiable fact behind a warm-path flag — e.g. a prior employer
    * that also appears in the candidate's own resume. Never invented. */

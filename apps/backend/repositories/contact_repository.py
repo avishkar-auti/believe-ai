@@ -11,7 +11,7 @@ from typing import Any, Literal
 from beanie.odm.operators.find.comparison import In
 from bson import ObjectId
 
-from models.contact import Contact, ContactSource
+from models.contact import Contact, ContactOutreachChannel, ContactSource
 
 ContactSortBy = Literal["createdAt", "firstName", "email", "company"]
 ContactSortDir = Literal["asc", "desc"]
@@ -84,6 +84,7 @@ async def create(
     notes: str | None,
     source: ContactSource,
     subscribed: bool,
+    outreach_channel: ContactOutreachChannel = "email",
 ) -> Contact:
     doc = Contact(
         userId=user_id,
@@ -97,6 +98,7 @@ async def create(
         notes=notes,
         source=source,
         subscribed=subscribed,
+        outreachChannel=outreach_channel,
     )
     await doc.insert()
     return doc

@@ -6,6 +6,7 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
+from beanie import PydanticObjectId
 from pydantic import BaseModel, Field, ValidationInfo, field_validator
 
 AiImproveAction = Literal[
@@ -124,6 +125,8 @@ class ResumeChatRequest(BaseModel):
     # Prior turns, oldest first — this route is stateless, so the caller
     # resends whatever conversational context it wants considered.
     history: list[ResumeChatMessage] = Field(default_factory=list)
+    # Which resume to search — defaults to whichever is Primary when omitted.
+    resumeId: PydanticObjectId | None = None
 
 
 class ResumeChatResult(BaseModel):
@@ -143,13 +146,20 @@ class CareerFitApiRequest(BaseModel):
     """
 
     targetRole: str | None = None
+    resumeId: PydanticObjectId | None = None
 
 
 class CareerFitResult(BaseModel):
+    """fitScore is a real, LLM-scored judgment (mirrors
+    InterviewAnswerFeedbackResult.overallScore below) — never derived
+    client-side from list lengths, which produced a narrow, uninformative
+    band clustered around 50% regardless of actual fit."""
+
     summary: str
     strengths: list[str]
     skillGaps: list[str]
     suggestedRoles: list[str]
+    fitScore: int = Field(ge=0, le=100)
 
 
 class SkillExtractionRequest(BaseModel):
@@ -197,6 +207,7 @@ class RoadmapApiRequest(BaseModel):
 
     goal: str = Field(min_length=1)
     personalize: bool = True
+    resumeId: PydanticObjectId | None = None
 
 
 class RoadmapResult(BaseModel):
@@ -205,20 +216,40 @@ class RoadmapResult(BaseModel):
     detectedSkills: list[str] = Field(default_factory=list)
 
 
+InterviewQuestionCategory = Literal["behavioral", "technical", "system_design", "coding"]
+# None/"mixed" both mean "generate a mix of categories" — see build_interview_questions_prompt.
+InterviewType = Literal["technical", "behavioral", "system_design", "coding", "mixed"]
+InterviewDifficulty = Literal["easy", "medium", "hard"]
+
+
 class InterviewQuestion(BaseModel):
     question: str
-    category: Literal["behavioral", "technical", "system_design", "coding"]
+    category: InterviewQuestionCategory
 
 
 class InterviewQuestionsRequest(BaseModel):
     resumeText: str = Field(min_length=1)
     targetRole: str | None = None
+    interviewType: InterviewType | None = None
+    difficulty: InterviewDifficulty | None = None
+    # Optional job-posting context — set when a session is started from a
+    # specific Job Board listing, so questions can probe that role directly
+    # instead of only the free-text targetRole. None for every other caller.
+    jobTitle: str | None = None
+    jobCompany: str | None = None
+    jobDescription: str | None = None
 
 
 class InterviewQuestionsApiRequest(BaseModel):
     """Route-level body — resumeText is filled in server-side, same reasoning as CareerFitApiRequest."""
 
     targetRole: str | None = None
+    interviewType: InterviewType | None = None
+    difficulty: InterviewDifficulty | None = None
+    resumeId: PydanticObjectId | None = None
+    jobTitle: str | None = None
+    jobCompany: str | None = None
+    jobDescription: str | None = None
 
 
 class InterviewQuestionsResult(BaseModel):
@@ -242,10 +273,44 @@ class InterviewCoachApiRequest(BaseModel):
 
     message: str = Field(min_length=1)
     history: list[InterviewCoachMessage] = Field(default_factory=list)
+    resumeId: PydanticObjectId | None = None
 
 
 class InterviewCoachResult(BaseModel):
     reply: str
+
+
+class InterviewAnswerFeedbackRequest(BaseModel):
+    resumeText: str = Field(min_length=1)
+    question: str = Field(min_length=1)
+    category: InterviewQuestionCategory
+    answer: str = Field(min_length=1)
+    targetRole: str | None = None
+
+
+class InterviewAnswerFeedbackApiRequest(BaseModel):
+    """Route-level body — resumeText is filled in server-side, same reasoning as CareerFitApiRequest."""
+
+    question: str = Field(min_length=1)
+    category: InterviewQuestionCategory
+    answer: str = Field(min_length=1)
+    targetRole: str | None = None
+    resumeId: PydanticObjectId | None = None
+
+
+class InterviewAnswerFeedbackResult(BaseModel):
+    """A real, LLM-scored rubric for one answer — never client-side math, so
+    every number here reflects an actual model judgment grounded in the
+    resume and the question, not a fabricated placeholder."""
+
+    overallScore: int = Field(ge=0, le=100)
+    technicalAccuracy: int = Field(ge=0, le=100)
+    clarity: int = Field(ge=0, le=100)
+    depth: int = Field(ge=0, le=100)
+    communication: int = Field(ge=0, le=100)
+    strengths: list[str]
+    improvements: list[str]
+    suggestedAnswer: str
 
 
 EmploymentType = Literal["full_time", "part_time", "contract", "internship"]
@@ -316,6 +381,9 @@ class TeamExtractionResult(BaseModel):
     members: list[TeamMemberExtract] = Field(default_factory=list)
 
 
+OutreachDraftIntent = Literal["outreach", "referral"]
+
+
 class OutreachDraftRequest(BaseModel):
     contactName: str = Field(min_length=1)
     roleTitle: str = Field(min_length=1)
@@ -328,11 +396,17 @@ class OutreachDraftRequest(BaseModel):
     matchingSkills: list[str] = Field(default_factory=list)
     candidateName: str | None = None
     includeCoverLetter: bool = False
+    # "referral" assumes an existing connection and asks for a referral instead
+    # of the standard cold-email/connection-note pair — see
+    # prompts/jobs.py::build_outreach_draft_prompt.
+    intent: OutreachDraftIntent = "outreach"
 
 
 class OutreachDraftResult(BaseModel):
     coldEmail: str
     linkedinNote: str
+    # Only populated when the request's intent is "referral" — null otherwise.
+    referralRequest: str | None = None
 
 
 class RoomQuestionsRequest(BaseModel):
@@ -486,7 +560,7 @@ class ProfileSummaryResult(BaseModel):
     summary: str
 
 
-NoteTransformAction = Literal["explain", "simplify", "summarize", "fix_grammar", "generate_example"]
+NoteTransformAction = Literal["explain", "simplify", "summarize", "fix_grammar", "generate_example", "extract_action_items"]
 
 
 class NoteTextTransformRequest(BaseModel):
@@ -596,3 +670,12 @@ class DesignEditRequest(BaseModel):
 
 class DesignEditResult(BaseModel):
     dsl: dict[str, Any]
+
+
+class DesignPromptEnhanceRequest(BaseModel):
+    prompt: str = Field(min_length=1)
+    platform: DesignPlatform
+
+
+class DesignPromptEnhanceResult(BaseModel):
+    enhancedPrompt: str

@@ -16,7 +16,13 @@ router = APIRouter(prefix="/job-leads", tags=["job-leads"])
 async def discover_leads_route(
     body: DiscoverLeadsInput, mongo_user_id: MongoUserIdDep, _user_id: UserIdDep, settings: SettingsDep
 ) -> list[JobLeadDto]:
-    result = await lead_discovery_service.discover(settings, mongo_user_id, PydanticObjectId(body.jobIntelId))
+    result = await lead_discovery_service.discover(
+        settings,
+        mongo_user_id,
+        PydanticObjectId(body.jobIntelId),
+        broaden=body.broaden,
+        location_override=body.locationOverride,
+    )
     await audit_service.record(mongo_user_id, "job_lead.discovered", "job_lead", entity_id=body.jobIntelId)
     return result
 
@@ -30,6 +36,6 @@ async def list_leads_by_job_route(job_intel_id: PydanticObjectId, mongo_user_id:
 async def add_to_contacts_route(
     lead_id: PydanticObjectId, body: AddToContactsInput, mongo_user_id: MongoUserIdDep, _user_id: UserIdDep
 ) -> JobLeadDto:
-    result = await lead_discovery_service.add_to_contacts(lead_id, mongo_user_id, body.email.lower())
+    result = await lead_discovery_service.add_to_contacts(lead_id, mongo_user_id, body.email.lower() if body.email else None)
     await audit_service.record(mongo_user_id, "job_lead.added_to_contact", "job_lead", entity_id=result.id)
     return result

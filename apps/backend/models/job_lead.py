@@ -6,10 +6,13 @@ so a JobLead can only become a real, sendable Contact through an explicit
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from typing import Literal
 
 from beanie import Document, PydanticObjectId
 from pydantic import Field
 from pymongo import IndexModel
+
+RelationshipStatus = Literal["connected", "not_connected", "unknown"]
 
 
 class JobLead(Document):
@@ -17,8 +20,14 @@ class JobLead(Document):
     jobIntelId: PydanticObjectId
     name: str
     title: str | None = None
+    headline: str | None = None
+    location: str | None = None
     linkedinUrl: str | None = None
     relevanceRank: int = 99
+    # 0-100, explainable rather than a black-box score — see relevanceReasons.
+    relevanceScore: int = 0
+    relevanceReasons: list[str] = Field(default_factory=list)
+    relationshipStatus: RelationshipStatus = "unknown"
     warmPath: bool = False
     warmPathReason: str | None = None
     workEmailPattern: str | None = None

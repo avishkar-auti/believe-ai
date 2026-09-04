@@ -9,17 +9,22 @@ the *same* collections side by side during the migration, never a parallel
 database.
 """
 
+from models.achievement import Achievement
 from models.audit_log import AuditLog
 from models.campaign import Campaign
 from models.career_fit import CareerFit
-from models.company_team_cache import CompanyTeamCache
+from models.certification import Certification
 from models.contact import Contact
 from models.design_project import DesignProject
 from models.design_screen import DesignScreen
 from models.discussion import Discussion
+from models.education import Education
 from models.email_log import EmailLog
+from models.experience import Experience
+from models.external_api_usage import ExternalApiUsage
 from models.feedback import Feedback
 from models.integration import Integration
+from models.interview_session import InterviewSession
 from models.job import Job
 from models.job_intel import JobIntel
 from models.job_lead import JobLead
@@ -32,12 +37,19 @@ from models.notification import Notification
 from models.outreach_draft import OutreachDraft
 from models.outreach_follow_up import OutreachFollowUp
 from models.outreach_send_log import OutreachSendLog
+from models.portfolio_project import PortfolioProject
+from models.practice_challenge import Challenge
+from models.practice_progress import UserPracticeProgress
+from models.practice_submission import Submission
+from models.profile_image import ProfileImage
 from models.resume import Resume, ResumeFile
 from models.roadmap import Roadmap
 from models.room_feedback import RoomFeedback
 from models.room_idea import RoomIdea
 from models.room_transcript_turn import RoomTranscriptTurn
 from models.saved_job import SavedJob
+from models.serp_lead_cache import SerpLeadCache
+from models.skill import Skill
 from models.template import Template
 from models.unsubscribe_record import UnsubscribeRecord
 from models.user import User
@@ -59,6 +71,7 @@ ALL_DOCUMENT_MODELS = [
     Feedback,
     Integration,
     Discussion,
+    InterviewSession,
     Job,
     SavedJob,
     JobIntel,
@@ -66,7 +79,8 @@ ALL_DOCUMENT_MODELS = [
     OutreachSendLog,
     OutreachFollowUp,
     JobLead,
-    CompanyTeamCache,
+    SerpLeadCache,
+    ExternalApiUsage,
     MockInterviewRoom,
     RoomIdea,
     RoomFeedback,
@@ -80,21 +94,37 @@ ALL_DOCUMENT_MODELS = [
     NoteFolder,
     NoteAttachment,
     NoteFlashcard,
+    Experience,
+    Education,
+    Skill,
+    PortfolioProject,
+    Certification,
+    Achievement,
+    ProfileImage,
+    Challenge,
+    Submission,
+    UserPracticeProgress,
 ]
 
 __all__ = [
     "ALL_DOCUMENT_MODELS",
+    "Achievement",
     "AuditLog",
     "Campaign",
     "CareerFit",
-    "CompanyTeamCache",
+    "Certification",
+    "Challenge",
     "Contact",
     "DesignProject",
     "DesignScreen",
     "Discussion",
+    "Education",
     "EmailLog",
+    "Experience",
+    "ExternalApiUsage",
     "Feedback",
     "Integration",
+    "InterviewSession",
     "Job",
     "JobIntel",
     "JobLead",
@@ -107,6 +137,8 @@ __all__ = [
     "OutreachDraft",
     "OutreachFollowUp",
     "OutreachSendLog",
+    "PortfolioProject",
+    "ProfileImage",
     "Roadmap",
     "Resume",
     "ResumeFile",
@@ -114,9 +146,13 @@ __all__ = [
     "RoomIdea",
     "RoomTranscriptTurn",
     "SavedJob",
+    "SerpLeadCache",
+    "Skill",
+    "Submission",
     "Template",
     "UnsubscribeRecord",
     "User",
     "UserContext",
+    "UserPracticeProgress",
     "YoutubeCache",
 ]

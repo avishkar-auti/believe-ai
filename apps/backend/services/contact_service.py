@@ -39,6 +39,7 @@ def _to_dto(doc: Contact) -> ContactDto:
         notes=doc.notes,
         source=doc.source,
         subscribed=doc.subscribed,
+        outreachChannel=doc.outreachChannel,
         createdAt=doc.createdAt.isoformat(),
         updatedAt=doc.updatedAt.isoformat(),
     )

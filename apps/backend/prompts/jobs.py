@@ -44,6 +44,7 @@ def build_outreach_draft_prompt(req: OutreachDraftRequest) -> str:
         if req.candidateName
         else " No candidate name was provided — close with a professional sign-off phrase only, no name, no placeholder."
     )
+    is_referral = req.intent == "referral"
 
     lines = [
         "You are generating concise, professional outreach content on behalf of a real job candidate reaching "
@@ -54,11 +55,22 @@ def build_outreach_draft_prompt(req: OutreachDraftRequest) -> str:
         "connection, or milestone not explicitly provided.",
         "If matching skills are given, weave in at most one or two naturally — never a bullet dump, and never "
         "claim a skill that wasn't given to you.",
-        json_schema('{"coldEmail": string, "linkedinNote": string, "coverLetter": string|null}'),
+        json_schema(
+            '{"coldEmail": string, "linkedinNote": string, "referralRequest": string|null, "coverLetter": string|null}'
+        ),
         'coldEmail: no "Subject:" line, a real greeting, under 150 words, ends with a clear low-pressure ask '
         f"(e.g. a quick chat).{signature_clause}",
         f"linkedinNote: aim for under {LINKEDIN_NOTE_CHAR_LIMIT} characters, no greeting or sign-off — get "
         "straight to the point (it will be hard-truncated afterward if you go over, so keep it tight).",
+        "referralRequest: "
+        + (
+            "the candidate and this contact are already connected on LinkedIn. Write a short, respectful message "
+            "that acknowledges the existing connection, references the grounded fact, and asks — without "
+            "pressure — whether the contact would be comfortable referring the candidate for this specific role. "
+            f"Offer to share more information if useful.{signature_clause}"
+            if is_referral
+            else "set to null — this is first-touch outreach, not a referral request."
+        ),
         "coverLetter: "
         + (
             "write a concise cover letter for this role, referencing the fact naturally."

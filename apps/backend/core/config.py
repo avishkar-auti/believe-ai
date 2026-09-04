@@ -73,6 +73,11 @@ class Settings(BaseSettings):
     # external results entirely — internal listings still work fine.
     rapidapi_jsearch_key: str | None = Field(default=None, alias="RAPIDAPI_JSEARCH_KEY")
 
+    # Job Outreach's contact discovery (clients/serpapi_client.py). Unset
+    # skips discovery entirely — leads simply come back empty rather than
+    # erroring, same degrade pattern as the other optional external lookups.
+    serpapi_api_key: str | None = Field(default=None, alias="SERPAPI_API_KEY")
+
     # Roadmap's video enrichment (clients/youtube_client.py). Unset skips
     # video search entirely — the rest of a roadmap (stages, documentation)
     # is still perfectly usable without it.
@@ -82,6 +87,12 @@ class Settings(BaseSettings):
     # Unset raises IntegrationError on use — unlike the two RAPIDAPI_* keys
     # above, there's no degraded fallback for "run this code".
     rapidapi_key: str | None = Field(default=None, alias="RAPIDAPI_KEY")
+
+    # Self-hosted Judge0 CE (docker-compose.yml's judge0-server, see
+    # judge0.conf) — a free alternative to RAPIDAPI_KEY above. Checked first
+    # by services/code_sandbox_service.py when both are set, since it costs
+    # nothing to call. No trailing slash, e.g. "http://localhost:2358".
+    judge0_self_hosted_url: str | None = Field(default=None, alias="JUDGE0_SELF_HOSTED_URL")
 
     # TURN relay for the Live Practice Room — optional. Without it, WebRTC
     # falls back to the public STUN server, which fails on networks that
