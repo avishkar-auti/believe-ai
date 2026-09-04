@@ -60,6 +60,21 @@ _GENERIC_SUBDOMAIN_PREFIXES = {
 _TITLE_SEPARATOR_RE = re.compile(r"\s+[|•·–—]\s+|\s+-\s+|\s+@\s+")
 _COMPANY_TITLE_NOISE_RE = re.compile(r"\b(careers?|jobs?|job\s+search|hiring|vacancies|openings|apply|home)\b", re.IGNORECASE)
 
+# "<Role> in <City>, <Region/Country>[, <PostalCode>]" — the dominant convention across
+# major ATS platforms (Workday, SuccessFactors, and similar) for stating a real place in
+# the page <title>, as opposed to LOCATION_PATTERNS' remote/hybrid/onsite-only signals.
+# The ", <Region>" clause is deliberately mandatory, not optional: without it, "in
+# Machine Learning" or "in Cloud Infrastructure" (a skill/domain phrase, not a place)
+# would also match — real title-line locations are near-universally city+region paired,
+# so requiring the comma trades a little recall for a lot of precision.
+_TITLE_PLACE_RE = re.compile(
+    r"\s+in\s+((?:[A-Z][\w.'-]*\s*){1,4}?,\s*(?:[A-Z][\w.'-]*\s*){1,3})(?:,\s*\d{4,6})?(?=\s*(?:[|\-–—]|$))"
+)
+# A job-requisition token ("R-276689", "REQ12345", "12345") — never part of a role name,
+# so it's excluded when deciding whether to merge a short seniority-only first title
+# segment ("Lead") with the next one ("Full Stack Web Applications").
+_JOB_ID_SEGMENT_RE = re.compile(r"^[A-Z]{0,5}-?\d{3,}$")
+
 
 def _slug_to_name(slug: str) -> str:
     return " ".join(w[0].upper() + w[1:] for w in re.split(r"[-_]+", slug) if w)
@@ -115,12 +130,32 @@ def _clean_company_fragment(fragment: str) -> str | None:
     cleaned = _COMPANY_TITLE_NOISE_RE.sub("", fragment)
     cleaned = re.sub(r"^[\s|\-–—·•,.]+|[\s|\-–—·•,.]+$", "", cleaned)
     cleaned = re.sub(r"\s{2,}", " ", cleaned)
+    # A category/department prefix before "at" ("Engineering Jobs at Mastercard" -> after
+    # the "Jobs" noise-strip above -> "Engineering at Mastercard") isn't the company — keep
+    # only what follows the last " at ", same convention _ROLE_AT_COMPANY_RE already assumes.
+    at_match = re.search(r"\bat\s+(.+)$", cleaned, re.IGNORECASE)
+    if at_match:
+        cleaned = at_match.group(1).strip()
     return cleaned or None
+
+
+def _location_from_title(title_line: str) -> str | None:
+    match = _TITLE_PLACE_RE.search(title_line)
+    if not match:
+        return None
+    place = re.sub(r"\s{2,}", " ", match.group(1)).strip().rstrip(",")
+    return place if 3 <= len(place) <= 80 else None
+
+
+def _looks_like_job_id(segment: str) -> bool:
+    return bool(_JOB_ID_SEGMENT_RE.match(segment.strip()))
 
 
 def _role_from_title_line(raw_text: str, url_company: str | None) -> str | None:
     """Splits the role off a page <title> like "Data Engineer | Barclays" — only when the
-    right-hand fragment is corroborated by the company the URL already independently yielded."""
+    right-hand fragment is corroborated by the company the URL already independently
+    yielded. A real place clause ("in Pune, India, 411006") is stripped first so it isn't
+    mistaken for just another pipe-delimited segment."""
     if not url_company:
         return None
     lines = [line.strip() for line in raw_text.split("\n") if line.strip()]
@@ -128,8 +163,9 @@ def _role_from_title_line(raw_text: str, url_company: str | None) -> str | None:
         return None
 
     title = lines[0]
-    if len(title) > 160:
+    if len(title) > 200:
         return None
+    title = _TITLE_PLACE_RE.sub("", title)
 
     parts = [p.strip() for p in _TITLE_SEPARATOR_RE.split(title) if p.strip()]
     if len(parts) < 2:
@@ -139,18 +175,27 @@ def _role_from_title_line(raw_text: str, url_company: str | None) -> str | None:
     if not tail or tail.lower() != url_company.lower():
         return None
 
-    role = parts[0].strip()
+    # The role is usually just the first segment, but a short seniority-only prefix
+    # ("Lead", "Senior") is merged with the next one as long as it isn't a job-ID token
+    # or the company-bearing tail itself ("Lead | R-276689 | ... at Mastercard" only has
+    # one segment to merge with here, since len(parts) > 2 guards against a bare 2-part
+    # "Lead | Mastercard" title merging its own tail into the role).
+    role_segments = [parts[0]]
+    if len(parts) > 2 and len(parts[0].split()) <= 2 and not _looks_like_job_id(parts[1]):
+        role_segments.append(parts[1])
+    role = " ".join(role_segments).strip()
+
     if re.fullmatch(_COMPANY_TITLE_NOISE_RE.pattern, role, re.IGNORECASE):
         return None
-    return role if 3 <= len(role) <= 100 else None
+    return role if 3 <= len(role) <= 120 else None
 
 
 def _fallback_role_title(raw_text: str) -> str | None:
     lines = [line.strip() for line in raw_text.split("\n") if line.strip()]
     if len(lines) < 2:
         return None
-    first = lines[0]
-    return first if 3 <= len(first) <= 100 else None
+    first = _TITLE_PLACE_RE.sub("", lines[0]).strip()
+    return first if 3 <= len(first) <= 160 else None
 
 
 def _fallback_role_title_from_caps(raw_text: str) -> str | None:
@@ -163,9 +208,20 @@ def _fallback_role_title_from_caps(raw_text: str) -> str | None:
     return re.sub(r"\w\S*", lambda w: w.group(0)[0].upper() + w.group(0)[1:].lower(), phrase)
 
 
+def _term_pattern(term: str) -> re.Pattern[str]:
+    """Word-boundary match, not substring — a naive `"go" in text.lower()` check
+    false-positives on "good"/"going"/"congo", and "java" on "javascript". `\\b` is
+    only applied on a side whose edge character is itself a word character, since
+    terms like "C++"/"C#" end in punctuation that `\\b` can never follow (no
+    word/non-word transition exists between two non-word characters)."""
+    escaped = re.escape(term)
+    prefix = r"\b" if term[0].isalnum() else ""
+    suffix = r"\b" if term[-1].isalnum() else ""
+    return re.compile(prefix + escaped + suffix, re.IGNORECASE)
+
+
 def _match_vocabulary(raw_text: str, vocabulary: list[str]) -> list[str]:
-    lowered = raw_text.lower()
-    return [term for term in vocabulary if term.lower() in lowered]
+    return [term for term in vocabulary if _term_pattern(term).search(raw_text)]
 
 
 def _match_first_pattern(raw_text: str, patterns: list[tuple[re.Pattern[str], str]], fallback: str) -> str:
@@ -188,6 +244,8 @@ def _extract_hiring_team_names(raw_text: str) -> list[str]:
 def parse_job_posting(raw_text: str, job_url: str = "") -> ParsedJobPosting:
     text = raw_text or ""
     url_company = _company_from_url(job_url) if job_url else None
+    lines = [line.strip() for line in text.split("\n") if line.strip()]
+    title_line = lines[0] if lines else ""
 
     role_title, company = _extract_role_and_company(text)
     if not role_title:
@@ -202,7 +260,9 @@ def parse_job_posting(raw_text: str, job_url: str = "") -> ParsedJobPosting:
     skills = _match_vocabulary(text, KNOWN_SKILL_KEYWORDS)
     ats_keywords = _match_vocabulary(text, ATS_KEYWORD_VOCAB)
     experience_level = _match_first_pattern(text, EXPERIENCE_LEVEL_PATTERNS, DEFAULT_EXPERIENCE_LEVEL)
-    location = _match_first_pattern(text, LOCATION_PATTERNS, DEFAULT_LOCATION)
+    # A real place ("Pune, India") from the page <title> wins over the work-mode-only
+    # remote/hybrid/onsite fallback, which can't express a real city/country at all.
+    location = _location_from_title(title_line) or _match_first_pattern(text, LOCATION_PATTERNS, DEFAULT_LOCATION)
     hiring_team_names = _extract_hiring_team_names(text)
 
     return ParsedJobPosting(

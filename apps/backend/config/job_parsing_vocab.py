@@ -20,6 +20,10 @@ EXPERIENCE_LEVEL_PATTERNS: list[tuple[re.Pattern[str], str]] = [
     (re.compile(r"\b(mid[\s-]?level|intermediate)\b", re.IGNORECASE), "Mid"),
 ]
 
+# Work-mode fallback only — these catch "remote"/"hybrid"/"onsite" phrasing, never a
+# real city/country. A real place (e.g. "Pune, India") is extracted separately from the
+# page <title> line by job_parsing.py's _location_from_title — this list is what's left
+# to try when that fails.
 LOCATION_PATTERNS: list[tuple[re.Pattern[str], str]] = [
     (re.compile(r"\bremote\b", re.IGNORECASE), "Remote"),
     (re.compile(r"\bhybrid\b", re.IGNORECASE), "Hybrid"),
