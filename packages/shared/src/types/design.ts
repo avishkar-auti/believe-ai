@@ -41,12 +41,29 @@ export interface DesignProject {
   id: string;
   name: string;
   screenCount: number;
+  /** The most recently touched screen's real design data, for a genuine
+   * dashboard-card preview — both null for a project with no screens yet. */
+  previewDsl: DesignNode | null;
+  previewPlatform: DesignPlatform | null;
   createdAt: string;
   updatedAt: string;
 }
 
 export interface CreateDesignProjectInput {
   name?: string;
+}
+
+export interface UpdateDesignProjectInput {
+  name: string;
+}
+
+export interface EnhanceDesignPromptInput {
+  prompt: string;
+  platform: DesignPlatform;
+}
+
+export interface EnhanceDesignPromptResult {
+  enhancedPrompt: string;
 }
 
 /** A screen's position on its project's infinite canvas. */

@@ -7,7 +7,7 @@ about rather than inventing node/style shapes of its own."""
 from __future__ import annotations
 
 from prompts.base import json_schema, log_prompt_version, untrusted_text
-from schemas.ai import DesignEditRequest, DesignGenerateRequest
+from schemas.ai import DesignEditRequest, DesignGenerateRequest, DesignPromptEnhanceRequest
 
 PROMPT_VERSION = "1.1.0"
 
@@ -86,6 +86,22 @@ def build_design_generate_prompt(req: DesignGenerateRequest) -> str:
         "Also produce a short, human-readable title for this screen (a few words, e.g. 'Fintech Dashboard').",
         *untrusted_text("Screen request", req.prompt),
         json_schema("{title: string, dsl: DesignNode}"),
+    ]
+    return "\n".join(lines)
+
+
+def build_design_prompt_enhance_prompt(req: DesignPromptEnhanceRequest) -> str:
+    log_prompt_version("design_prompt_enhance", PROMPT_VERSION)
+    lines = [
+        f"Rewrite this short, casual design brief into a clearer, more specific one for a {req.platform} UI screen — "
+        "the kind of brief that would make the resulting screen more useful and complete.",
+        "Add concrete detail the original only implied: what sections/content the screen should have, what the "
+        "primary user action is, what kind of data or copy tone fits. Do not invent a specific real brand, company, "
+        "or named person.",
+        "Stay close to the original intent — expand and sharpen it, don't change what it's fundamentally asking for. "
+        "Keep it to 1-3 sentences, plain prose (not a bulleted spec).",
+        *untrusted_text("Original brief", req.prompt),
+        json_schema("{enhancedPrompt: string}"),
     ]
     return "\n".join(lines)
 

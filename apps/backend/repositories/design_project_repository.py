@@ -29,6 +29,16 @@ async def touch(project_id: ObjectId, user_id: ObjectId) -> None:
     await doc.save()
 
 
+async def rename(project_id: ObjectId, user_id: ObjectId, name: str) -> DesignProject | None:
+    doc = await find_by_id(project_id, user_id)
+    if not doc:
+        return None
+    doc.name = name
+    doc.updatedAt = datetime.now(UTC)
+    await doc.save()
+    return doc
+
+
 async def delete(project_id: ObjectId, user_id: ObjectId) -> bool:
     doc = await find_by_id(project_id, user_id)
     if not doc:

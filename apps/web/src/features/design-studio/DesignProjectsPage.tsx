@@ -1,24 +1,59 @@
-import { useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { LayoutTemplate, Plus, Search, Trash2 } from "lucide-react";
-import type { DesignProject } from "@believe-ai/shared";
-import { Button } from "../../components/ui/Button.js";
-import { EmptyState } from "../../components/ui/EmptyState.js";
-import { Spinner } from "../../components/ui/Spinner.js";
-import { createDesignProject, deleteDesignProject, fetchDesignProjects } from "./designApi.js";
-import { groupProjectsByDate } from "./projectGroups.js";
+import type { DesignPlatform, DesignProject } from "@believe-ai/shared";
+import { Skeleton } from "../../components/ui/Skeleton.js";
+import {
+  createDesignProject,
+  createDesignScreen,
+  deleteDesignProject,
+  duplicateDesignProject,
+  fetchDesignProjects,
+  renameDesignProject,
+} from "./designApi.js";
+import { AIPromptComposer } from "./AIPromptComposer.js";
+import { EmptyProjectsState } from "./EmptyProjectsState.js";
+import { GenerationOverlay } from "./GenerationOverlay.js";
+import { ProjectGrid } from "./ProjectGrid.js";
+import { ProjectToolbar, type PlatformFilter, type ProjectSort, type ProjectView } from "./ProjectToolbar.js";
+import { QuickStartIdeas } from "./QuickStartIdeas.js";
+import { RenameProjectDialog } from "./RenameProjectDialog.js";
+import { StudioHeader } from "./StudioHeader.js";
+import { StudioHero } from "./StudioHero.js";
+import { StudioSearchPalette } from "./StudioSearchPalette.js";
+import { TemplateSection } from "./TemplateSection.js";
+import { FloatingNotesLayer } from "../floating-notes/FloatingNotesLayer.js";
 
+/** The studio entry point: an AI creation launcher, not a dashboard. One large
+ * prompt creates a project and its first screen, then hands straight over to the
+ * canvas. Existing work sits below as a real, searchable project browser. */
 export function DesignProjectsPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const [search, setSearch] = useState("");
+  const [prompt, setPrompt] = useState("");
+  const [platform, setPlatform] = useState<DesignPlatform>("web");
+  const [error, setError] = useState<string | null>(null);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [renameTarget, setRenameTarget] = useState<DesignProject | null>(null);
+  const [sort, setSort] = useState<ProjectSort>("updated");
+  const [view, setView] = useState<ProjectView>("grid");
+  const [platformFilter, setPlatformFilter] = useState<PlatformFilter>("all");
+  const promptRef = useRef<HTMLTextAreaElement>(null);
 
   const projectsQuery = useQuery({ queryKey: ["design-projects"], queryFn: fetchDesignProjects });
 
   const createMutation = useMutation({
-    mutationFn: () => createDesignProject({}),
+    mutationFn: async (vars: { prompt: string | null; platform: DesignPlatform }) => {
+      const name = vars.prompt ? vars.prompt.slice(0, 48) : "Untitled design";
+      const project = await createDesignProject({ name });
+      if (vars.prompt) {
+        // Kick off the first generation so the canvas opens already building.
+        void createDesignScreen(project.id, { prompt: vars.prompt, platform: vars.platform }).catch(() => undefined);
+      }
+      return project;
+    },
     onSuccess: (project) => navigate(`/app/design-studio/${project.id}`),
+    onError: () => setError("Couldn't start a new project — please try again."),
   });
 
   const deleteMutation = useMutation({
@@ -26,107 +61,133 @@ export function DesignProjectsPage() {
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["design-projects"] }),
   });
 
-  const projects = projectsQuery.data ?? [];
-  const filtered = search.trim()
-    ? projects.filter((p) => p.name.toLowerCase().includes(search.trim().toLowerCase()))
-    : projects;
-  const groups = groupProjectsByDate(filtered);
+  const renameMutation = useMutation({
+    mutationFn: ({ id, name }: { id: string; name: string }) => renameDesignProject(id, { name }),
+    onSuccess: () => {
+      setRenameTarget(null);
+      void queryClient.invalidateQueries({ queryKey: ["design-projects"] });
+    },
+  });
+
+  const duplicateMutation = useMutation({
+    mutationFn: duplicateDesignProject,
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["design-projects"] }),
+  });
+
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        setSearchOpen(true);
+      }
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
+
+  function handleSubmit() {
+    const text = prompt.trim();
+    if (!text || createMutation.isPending) return;
+    createMutation.mutate({ prompt: text, platform });
+  }
+
+  function handleSelectIdea(text: string) {
+    setPrompt(text);
+    promptRef.current?.focus();
+  }
+
+  const projects = useMemo(() => projectsQuery.data ?? [], [projectsQuery.data]);
+  const visible = useMemo(() => {
+    const filtered = platformFilter === "all" ? projects : projects.filter((p) => p.previewPlatform === platformFilter);
+    const sorted = [...filtered];
+    if (sort === "name") sorted.sort((a, b) => a.name.localeCompare(b.name));
+    else sorted.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+    return sorted;
+  }, [projects, platformFilter, sort]);
 
   return (
-    <div className="mx-auto max-w-content space-y-5">
-      <div className="flex flex-wrap items-end justify-between gap-3 border-b border-ink-200/80 pb-5 dark:border-ink-700">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-ink-400 dark:text-ink-500">
-            AI Design &amp; Prototyping
-          </p>
-          <h1 className="text-title font-semibold text-ink-900 dark:text-white">Design Studio</h1>
-        </div>
-        <Button onClick={() => createMutation.mutate()} disabled={createMutation.isPending}>
-          <Plus className="h-4 w-4" />
-          {createMutation.isPending ? "Creating…" : "New Design"}
-        </Button>
-      </div>
+    <div className="flex min-h-screen flex-col bg-bg text-fg">
+      <StudioHeader onOpenSearch={() => setSearchOpen(true)} />
 
-      <div className="relative max-w-sm">
-        <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-400" />
-        <input
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search projects…"
-          className="h-11 w-full rounded-pill border border-ink-200 bg-white pl-11 pr-4 text-sm text-ink-900 placeholder:text-ink-400 focus:border-ink-900 focus:outline-none dark:border-ink-700 dark:bg-ink-800 dark:text-ink-50 dark:focus:border-ink-300"
-        />
-      </div>
+      <main className="mx-auto w-full max-w-[1320px] flex-1 px-4 pb-20 pt-12 sm:px-6">
+        <StudioHero />
 
-      {projectsQuery.isLoading ? (
-        <div className="flex justify-center py-16">
-          <Spinner className="h-6 w-6 text-ink-400" />
+        <div className="relative mx-auto mt-7 max-w-2xl">
+          <AIPromptComposer
+            value={prompt}
+            onChange={setPrompt}
+            platform={platform}
+            onPlatformChange={setPlatform}
+            onSubmit={handleSubmit}
+            submitting={createMutation.isPending}
+            onOpenBlankCanvas={() => createMutation.mutate({ prompt: null, platform })}
+            promptRef={promptRef}
+          />
+          <GenerationOverlay active={createMutation.isPending} />
         </div>
-      ) : projects.length === 0 ? (
-        <EmptyState
-          icon={<LayoutTemplate className="h-6 w-6 text-ink-400" />}
-          title="No designs yet"
-          description="Click New Design to generate your first screen."
-        />
-      ) : filtered.length === 0 ? (
-        <EmptyState title="No matches" description="No projects match your search." />
-      ) : (
-        <div className="space-y-6">
-          {groups.map((group) => (
-            <div key={group.label} className="space-y-2">
-              <p className="text-xs font-semibold uppercase tracking-wider text-ink-400 dark:text-ink-500">
-                {group.label}
-              </p>
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
-                {group.projects.map((project) => (
-                  <ProjectCard
-                    key={project.id}
-                    project={project}
-                    onOpen={() => navigate(`/app/design-studio/${project.id}`)}
-                    onDelete={() => deleteMutation.mutate(project.id)}
-                  />
-                ))}
-              </div>
+        {error && <p className="mx-auto mt-2 max-w-2xl px-1 text-xs text-critical">{error}</p>}
+
+        <div className="mx-auto max-w-2xl">
+          <QuickStartIdeas onSelect={handleSelectIdea} />
+        </div>
+
+        <section className="mt-14">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <h2 className="text-h3 text-fg">Recent projects</h2>
+            <ProjectToolbar
+              onOpenSearch={() => setSearchOpen(true)}
+              sort={sort}
+              onSortChange={setSort}
+              view={view}
+              onViewChange={setView}
+              platformFilter={platformFilter}
+              onPlatformFilterChange={setPlatformFilter}
+            />
+          </div>
+
+          {projectsQuery.isLoading ? (
+            <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+              {[0, 1, 2, 3].map((i) => (
+                <Skeleton key={i} className="h-56 rounded-xl" />
+              ))}
             </div>
-          ))}
-        </div>
+          ) : projects.length === 0 ? (
+            <div className="mt-4">
+              <EmptyProjectsState onCreateWithAI={() => promptRef.current?.focus()} onOpenBlankCanvas={() => createMutation.mutate({ prompt: null, platform })} />
+            </div>
+          ) : visible.length === 0 ? (
+            <p className="mt-6 text-xs text-fg-subtle">No projects match this filter.</p>
+          ) : (
+            <ProjectGrid
+              projects={visible}
+              view={view}
+              onOpen={(id) => navigate(`/app/design-studio/${id}`)}
+              onRename={setRenameTarget}
+              onDuplicate={(id) => duplicateMutation.mutate(id)}
+              onDelete={(id) => deleteMutation.mutate(id)}
+              onNewProject={() => createMutation.mutate({ prompt: null, platform })}
+            />
+          )}
+        </section>
+
+        <TemplateSection onSelect={handleSelectIdea} />
+      </main>
+
+      <StudioSearchPalette open={searchOpen} onClose={() => setSearchOpen(false)} projects={projects} onSelectIdea={handleSelectIdea} />
+
+      {renameTarget && (
+        <RenameProjectDialog
+          open={Boolean(renameTarget)}
+          currentName={renameTarget.name}
+          onClose={() => setRenameTarget(null)}
+          onSave={(name) => renameMutation.mutate({ id: renameTarget.id, name })}
+          saving={renameMutation.isPending}
+        />
       )}
-    </div>
-  );
-}
 
-function ProjectCard({ project, onOpen, onDelete }: { project: DesignProject; onOpen: () => void; onDelete: () => void }) {
-  return (
-    <div
-      onClick={onOpen}
-      role="button"
-      tabIndex={0}
-      onKeyDown={(e) => {
-        if (e.key === "Enter") onOpen();
-      }}
-      className="group relative flex cursor-pointer flex-col gap-3 rounded-2xl border border-ink-100 bg-white p-5 transition-all duration-200 hover:-translate-y-0.5 hover:border-brand-200 hover:shadow-lift dark:border-ink-700 dark:bg-ink-800 dark:hover:border-brand-500/40"
-    >
-      <button
-        type="button"
-        onClick={(e) => {
-          e.stopPropagation();
-          onDelete();
-        }}
-        aria-label="Delete project"
-        className="absolute right-3 top-3 z-10 flex h-8 w-8 items-center justify-center rounded-full text-ink-300 opacity-0 transition-all duration-200 hover:bg-red-500/10 hover:text-red-500 focus-visible:opacity-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-500 group-hover:opacity-100 dark:text-ink-600"
-      >
-        <Trash2 className="h-4 w-4" />
-      </button>
-
-      <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-brand-500/10 text-brand-600 dark:text-brand-300">
-        <LayoutTemplate className="h-5 w-5" />
-      </span>
-
-      <div className="min-w-0">
-        <h3 className="truncate text-sm font-semibold text-ink-900 dark:text-white">{project.name}</h3>
-        <p className="text-xs text-ink-400 dark:text-ink-500">
-          {project.screenCount} {project.screenCount === 1 ? "screen" : "screens"}
-        </p>
-      </div>
+      {/* This page also runs outside DashboardLayout — see DesignStudioPage's
+          router comment — so it needs its own mount too. */}
+      <FloatingNotesLayer />
     </div>
   );
 }

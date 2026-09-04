@@ -5,6 +5,9 @@ import type {
   DesignScreen,
   DesignScreenSummary,
   EditDesignScreenInput,
+  EnhanceDesignPromptInput,
+  EnhanceDesignPromptResult,
+  UpdateDesignProjectInput,
   UpdateDesignScreenPositionInput,
 } from "@believe-ai/shared";
 import { apiClient } from "../../lib/apiClient.js";
@@ -24,8 +27,23 @@ export async function createDesignProject(input: CreateDesignProjectInput) {
   return res.data;
 }
 
+export async function renameDesignProject(id: string, input: UpdateDesignProjectInput) {
+  const res = await apiClient.patch<DesignProject>(`/design/projects/${id}`, input);
+  return res.data;
+}
+
+export async function duplicateDesignProject(id: string) {
+  const res = await apiClient.post<DesignProject>(`/design/projects/${id}/duplicate`);
+  return res.data;
+}
+
 export async function deleteDesignProject(id: string) {
   await apiClient.delete(`/design/projects/${id}`);
+}
+
+export async function enhanceDesignPrompt(input: EnhanceDesignPromptInput) {
+  const res = await apiClient.post<EnhanceDesignPromptResult>("/design/enhance-prompt", input);
+  return res.data.enhancedPrompt;
 }
 
 export async function fetchDesignScreens(projectId: string) {

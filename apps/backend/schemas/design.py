@@ -54,9 +54,26 @@ class DesignProjectDto(BaseModel):
     id: str
     name: str
     screenCount: int
+    # The most recently touched screen's real design data, for a genuine
+    # dashboard-card preview — both None for a project with no screens yet.
+    previewDsl: dict[str, Any] | None = None
+    previewPlatform: DesignPlatform | None = None
     createdAt: str
     updatedAt: str
 
 
 class CreateDesignProjectInput(BaseModel):
     name: str = Field(default="Untitled design")
+
+
+class UpdateDesignProjectInput(BaseModel):
+    name: str = Field(min_length=1)
+
+
+class EnhanceDesignPromptInput(BaseModel):
+    prompt: str = Field(min_length=1)
+    platform: DesignPlatform
+
+
+class EnhanceDesignPromptResult(BaseModel):
+    enhancedPrompt: str

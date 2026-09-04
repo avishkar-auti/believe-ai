@@ -12,18 +12,20 @@ from __future__ import annotations
 
 from bson import ObjectId
 
-from agents.design_agent import edit_design_screen, generate_design_screen
+from agents.design_agent import edit_design_screen, enhance_design_prompt, generate_design_screen
 from core.config import Settings
 from core.errors import NotFoundError
 from models.design_screen import DesignScreen, DesignScreenPosition
 from repositories import design_project_repository, design_screen_repository
-from schemas.ai import DesignEditRequest, DesignGenerateRequest
+from schemas.ai import DesignEditRequest, DesignGenerateRequest, DesignPromptEnhanceRequest
 from schemas.design import (
     CreateDesignScreenInput,
     DesignScreenDto,
     DesignScreenPositionDto,
     DesignScreenSummaryDto,
     EditDesignScreenInput,
+    EnhanceDesignPromptInput,
+    EnhanceDesignPromptResult,
 )
 
 _CARD_W = 360
@@ -124,3 +126,8 @@ async def delete(screen_id: ObjectId, user_id: ObjectId) -> None:
     deleted = await design_screen_repository.delete(screen_id, user_id)
     if not deleted:
         raise NotFoundError("Design screen not found")
+
+
+async def enhance_prompt(settings: Settings, input_: EnhanceDesignPromptInput) -> EnhanceDesignPromptResult:
+    result = await enhance_design_prompt(settings, DesignPromptEnhanceRequest(prompt=input_.prompt, platform=input_.platform))
+    return EnhanceDesignPromptResult(enhancedPrompt=result.enhancedPrompt)

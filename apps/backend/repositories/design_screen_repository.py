@@ -44,6 +44,16 @@ async def count_by_project(project_id: ObjectId, user_id: ObjectId) -> int:
     return await DesignScreen.find(DesignScreen.userId == user_id, DesignScreen.projectId == project_id).count()
 
 
+async def find_latest_by_project(project_id: ObjectId, user_id: ObjectId) -> DesignScreen | None:
+    """The screen a project's dashboard card previews — most recently
+    touched, same recency signal the project list itself sorts by."""
+    return (
+        await DesignScreen.find(DesignScreen.userId == user_id, DesignScreen.projectId == project_id)
+        .sort("-updatedAt")
+        .first_or_none()
+    )
+
+
 async def delete_by_project(project_id: ObjectId, user_id: ObjectId) -> None:
     await DesignScreen.find(DesignScreen.userId == user_id, DesignScreen.projectId == project_id).delete()
 

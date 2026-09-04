@@ -16,6 +16,9 @@ from schemas.design import (
     DesignScreenDto,
     DesignScreenSummaryDto,
     EditDesignScreenInput,
+    EnhanceDesignPromptInput,
+    EnhanceDesignPromptResult,
+    UpdateDesignProjectInput,
     UpdateDesignScreenPositionInput,
 )
 from services import design_project_service, design_service
@@ -42,6 +45,23 @@ async def get_project_route(project_id: str, mongo_user_id: MongoUserIdDep) -> D
 async def delete_project_route(project_id: str, mongo_user_id: MongoUserIdDep) -> dict[str, bool]:
     await design_project_service.delete(ObjectId(project_id), mongo_user_id)
     return {"deleted": True}
+
+
+@router.patch("/projects/{project_id}", response_model=DesignProjectDto)
+async def rename_project_route(project_id: str, body: UpdateDesignProjectInput, mongo_user_id: MongoUserIdDep) -> DesignProjectDto:
+    return await design_project_service.rename(ObjectId(project_id), mongo_user_id, body)
+
+
+@router.post("/projects/{project_id}/duplicate", response_model=DesignProjectDto, status_code=201)
+async def duplicate_project_route(project_id: str, mongo_user_id: MongoUserIdDep) -> DesignProjectDto:
+    return await design_project_service.duplicate(ObjectId(project_id), mongo_user_id)
+
+
+@router.post("/enhance-prompt", response_model=EnhanceDesignPromptResult)
+async def enhance_prompt_route(
+    body: EnhanceDesignPromptInput, settings: SettingsDep, _mongo_user_id: MongoUserIdDep
+) -> EnhanceDesignPromptResult:
+    return await design_service.enhance_prompt(settings, body)
 
 
 @router.get("/projects/{project_id}/screens/", response_model=list[DesignScreenSummaryDto])
