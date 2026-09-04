@@ -1,0 +1,48 @@
+{
+  "slug": "agent-memory-summarization",
+  "title": "Summarize Agent Memory Under a Token Budget",
+  "track": "agents",
+  "difficulty": "advanced",
+  "challengeType": "coding",
+  "status": "published",
+  "summary": "Implement a rolling strategy that keeps conversation memory under a token budget without losing the most recent turns.",
+  "description": "## Scenario\n\nA long-running agent conversation eventually won't fit in the model's context window alongside its system prompt and tools. Simply truncating from the front loses recency (the most relevant turns); truncating from the back loses the current thread entirely. The standard compromise: always keep the most recent turns, and mark (rather than silently discard) whatever had to be dropped.\n\n## Task\n\nImplement in `solution.py`:\n\n- `compact_memory(turns: list[str], token_counts: list[int], budget: int) -> list[str]`\n\nWorking backward from the most recent turn, keep as many trailing turns as fit within `budget` total tokens. **Always keep at least the single most recent turn**, even if its token count alone exceeds `budget` — never return an empty result for a non-empty conversation. If any earlier turns had to be dropped to fit, prepend the single marker string `\"[earlier conversation summarized]\"` before the kept turns; if everything fit, no marker is added.\n\n## Requirements\n\n- `compact_memory([], [], 100)` returns `[]`.\n- Kept turns preserve their original chronological order.\n- `token_counts[i]` always corresponds to `turns[i]` — same length, same order.\n- The marker, when present, is a single extra string at the front — it does not count against `budget` itself.",
+  "tags": ["Agents", "Memory", "Context Management"],
+  "estimatedMinutes": 30,
+  "starterFiles": [
+    {
+      "path": "solution.py",
+      "language": "python",
+      "readOnly": false,
+      "content": "def compact_memory(turns: list[str], token_counts: list[int], budget: int) -> list[str]:\n    \"\"\"Keep the most recent turns that fit within `budget` tokens, always\n    keeping at least the last turn. Prepends a summary marker if any\n    earlier turns were dropped.\n    \"\"\"\n    # TODO: implement\n    raise NotImplementedError\n"
+    }
+  ],
+  "testCases": [
+    {
+      "name": "keeps everything when it all fits",
+      "input": "compact_memory(['t1', 't2', 't3'], [10, 10, 10], 100)",
+      "expectedOutput": "['t1', 't2', 't3']",
+      "hidden": false
+    },
+    {
+      "name": "drops the oldest turn and adds a marker",
+      "input": "compact_memory(['t1', 't2', 't3'], [10, 10, 10], 25)",
+      "expectedOutput": "['[earlier conversation summarized]', 't2', 't3']",
+      "hidden": true
+    },
+    {
+      "name": "always keeps the last turn even if oversized",
+      "input": "compact_memory(['huge'], [500], 10)",
+      "expectedOutput": "['huge']",
+      "hidden": true
+    },
+    {
+      "name": "empty conversation",
+      "input": "compact_memory([], [], 100)",
+      "expectedOutput": "[]",
+      "hidden": true
+    }
+  ],
+  "resources": [],
+  "order": 14
+}

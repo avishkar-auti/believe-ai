@@ -1,0 +1,48 @@
+{
+  "slug": "agent-infinite-loop-guard",
+  "title": "Fix an Agent Stuck in a Tool-Call Loop",
+  "track": "agents",
+  "difficulty": "intermediate",
+  "challengeType": "debugging",
+  "status": "published",
+  "summary": "An agent's loop-termination check never fires — find and fix the bug keeping it stuck calling the same tool.",
+  "description": "## Scenario\n\nAn agent occasionally gets stuck calling the same tool with the same arguments over and over — usually because a tool returned an error the model doesn't know how to act on differently. Production has a guard meant to detect this pattern and force the agent to stop, but on-call reports agents burning through their entire step budget instead of tripping the guard early.\n\n## Task\n\n`solution.py` contains `is_stuck_in_loop(action_history: list[str], repeat_threshold: int) -> bool`. It's meant to return `True` when the **most recent** `repeat_threshold` actions in `action_history` are all identical (the agent repeating itself right now) — not when *any* `repeat_threshold`-sized run of identical actions appears anywhere in history. Find the bug and fix it.\n\n## Requirements\n\n- Do not change the function's signature.\n- If `len(action_history) < repeat_threshold`, there isn't enough history to judge — return `False`.\n- Only the tail of the history matters: old repeated actions earlier in the list must not trigger a false positive if recent actions have moved on.",
+  "tags": ["Agents", "Debugging", "Safety"],
+  "estimatedMinutes": 20,
+  "starterFiles": [
+    {
+      "path": "solution.py",
+      "language": "python",
+      "readOnly": false,
+      "content": "def is_stuck_in_loop(action_history: list[str], repeat_threshold: int) -> bool:\n    \"\"\"True when the most recent repeat_threshold actions are all identical.\"\"\"\n    if len(action_history) < repeat_threshold:\n        return False\n    window = action_history[:repeat_threshold]\n    return len(set(window)) == 1\n"
+    }
+  ],
+  "testCases": [
+    {
+      "name": "detects a genuine recent repeat",
+      "input": "is_stuck_in_loop(['search', 'lookup', 'lookup', 'lookup'], 3)",
+      "expectedOutput": "True",
+      "hidden": false
+    },
+    {
+      "name": "not enough history yet",
+      "input": "is_stuck_in_loop(['search'], 3)",
+      "expectedOutput": "False",
+      "hidden": false
+    },
+    {
+      "name": "old repetition does not falsely trigger",
+      "input": "is_stuck_in_loop(['lookup', 'lookup', 'lookup', 'search', 'checkout'], 3)",
+      "expectedOutput": "False",
+      "hidden": true
+    },
+    {
+      "name": "exactly threshold-length varied history",
+      "input": "is_stuck_in_loop(['a', 'b', 'c'], 3)",
+      "expectedOutput": "False",
+      "hidden": true
+    }
+  ],
+  "resources": [],
+  "order": 13
+}

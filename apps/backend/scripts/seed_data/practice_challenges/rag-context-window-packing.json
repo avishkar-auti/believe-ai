@@ -1,0 +1,48 @@
+{
+  "slug": "rag-context-window-packing",
+  "title": "Pack Retrieved Chunks into a Context Budget",
+  "track": "rag",
+  "difficulty": "intermediate",
+  "challengeType": "coding",
+  "status": "published",
+  "summary": "Select and order ranked chunks to fit inside a token budget without cutting a chunk mid-sentence.",
+  "description": "## Scenario\n\nRetrieval gave you ten ranked chunks, but your prompt only has room for a few hundred tokens of context. Naively concatenating chunks until you blow the budget either truncates a chunk mid-sentence (confusing the model) or wastes budget by stopping too early.\n\n## Task\n\nImplement in `solution.py`:\n\n- `pack_chunks(chunks: list[str], token_counts: list[int], budget: int) -> list[str]` — given chunks already ranked best-first, and each chunk's precomputed token count (same length/order as `chunks`), return the prefix of chunks (in the same order) whose token counts sum to at most `budget`. Never include a chunk that would push the running total over budget — skip it and keep checking the remaining chunks (a later, shorter chunk might still fit).\n\n## Requirements\n\n- The result preserves the original relative order of whichever chunks are included.\n- If a single chunk's token count already exceeds `budget`, it's skipped entirely (never partially included — no mid-sentence truncation).\n- If no chunk fits, return `[]`.\n- `pack_chunks([], [], 100)` returns `[]`.",
+  "tags": ["RAG", "Context Window", "Token Budget"],
+  "estimatedMinutes": 25,
+  "starterFiles": [
+    {
+      "path": "solution.py",
+      "language": "python",
+      "readOnly": false,
+      "content": "def pack_chunks(chunks: list[str], token_counts: list[int], budget: int) -> list[str]:\n    \"\"\"Greedily select chunks (best-first order preserved) that fit in `budget`\n    tokens total, skipping any chunk that would blow the budget rather than\n    truncating it.\n    \"\"\"\n    # TODO: implement\n    raise NotImplementedError\n"
+    }
+  ],
+  "testCases": [
+    {
+      "name": "packs chunks that fit under budget",
+      "input": "pack_chunks(['a','b','c'], [50, 40, 30], 100)",
+      "expectedOutput": "['a', 'b']",
+      "hidden": false
+    },
+    {
+      "name": "skips an oversized chunk but keeps checking",
+      "input": "pack_chunks(['big','small'], [200, 20], 100)",
+      "expectedOutput": "['small']",
+      "hidden": true
+    },
+    {
+      "name": "nothing fits",
+      "input": "pack_chunks(['a'], [500], 100)",
+      "expectedOutput": "[]",
+      "hidden": true
+    },
+    {
+      "name": "empty input",
+      "input": "pack_chunks([], [], 100)",
+      "expectedOutput": "[]",
+      "hidden": true
+    }
+  ],
+  "resources": [],
+  "order": 8
+}

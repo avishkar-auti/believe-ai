@@ -1,0 +1,56 @@
+{
+  "slug": "sliding-window-chunker",
+  "title": "Sliding-Window Text Chunker",
+  "track": "python-for-ai",
+  "difficulty": "intermediate",
+  "challengeType": "coding",
+  "status": "published",
+  "summary": "Split a long document into overlapping fixed-size chunks by token count, the way a RAG ingestion pipeline would.",
+  "description": "## Scenario\n\nBefore a document can be embedded and indexed for retrieval, it has to be split into chunks small enough to embed meaningfully and retrieve precisely. Overlap between consecutive chunks matters: without it, a sentence that straddles a chunk boundary loses context on both sides.\n\n## Task\n\nImplement in `solution.py`:\n\n- `chunk_tokens(tokens: list[str], chunk_size: int, overlap: int) -> list[list[str]]` — splits a token list into chunks of `chunk_size` tokens, where each chunk after the first starts `chunk_size - overlap` tokens after the previous chunk started.\n\n## Requirements\n\n- `overlap < chunk_size` is guaranteed by the caller — you don't need to validate it.\n- The last chunk may be shorter than `chunk_size` (whatever tokens remain).\n- No token is skipped: every index from `0` to `len(tokens) - 1` appears in at least one chunk.\n- `chunk_tokens([], 10, 2)` returns `[]` — no empty chunks are ever produced.\n- If `len(tokens) <= chunk_size`, the result is a single chunk containing all tokens.",
+  "tags": ["Python", "RAG", "Chunking"],
+  "estimatedMinutes": 25,
+  "starterFiles": [
+    {
+      "path": "solution.py",
+      "language": "python",
+      "readOnly": false,
+      "content": "def chunk_tokens(tokens: list[str], chunk_size: int, overlap: int) -> list[list[str]]:\n    \"\"\"Split tokens into overlapping fixed-size chunks.\n\n    Each chunk after the first starts (chunk_size - overlap) tokens after\n    the previous chunk's start. The final chunk may be shorter.\n    \"\"\"\n    # TODO: implement\n    raise NotImplementedError\n"
+    }
+  ],
+  "testCases": [
+    {
+      "name": "no overlap, exact multiple",
+      "input": "chunk_tokens(['a','b','c','d','e','f'], 3, 0)",
+      "expectedOutput": "[['a','b','c'], ['d','e','f']]",
+      "hidden": false
+    },
+    {
+      "name": "with overlap",
+      "input": "chunk_tokens(['a','b','c','d','e'], 3, 1)",
+      "expectedOutput": "[['a','b','c'], ['c','d','e']]",
+      "hidden": false
+    },
+    {
+      "name": "empty input",
+      "input": "chunk_tokens([], 10, 2)",
+      "expectedOutput": "[]",
+      "hidden": true
+    },
+    {
+      "name": "shorter than chunk size",
+      "input": "chunk_tokens(['a','b'], 5, 1)",
+      "expectedOutput": "[['a','b']]",
+      "hidden": true
+    },
+    {
+      "name": "final chunk shorter than chunk_size",
+      "input": "chunk_tokens(['a','b','c','d','e'], 3, 0)",
+      "expectedOutput": "[['a','b','c'], ['d','e']]",
+      "hidden": true
+    }
+  ],
+  "resources": [
+    { "title": "Pinecone: Chunking strategies for LLM applications", "url": "https://www.pinecone.io/learn/chunking-strategies/" }
+  ],
+  "order": 3
+}

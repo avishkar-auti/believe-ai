@@ -1,0 +1,48 @@
+{
+  "slug": "json-schema-validator-fix",
+  "title": "Fix the Broken LLM-Output Validator",
+  "track": "python-for-ai",
+  "difficulty": "intermediate",
+  "challengeType": "debugging",
+  "status": "published",
+  "summary": "A validator meant to catch malformed LLM output has a bug that lets invalid payloads through silently.",
+  "description": "## Scenario\n\nYour service asks an LLM to return structured JSON (say, `{\"name\": ..., \"email\": ..., \"confidence\": ...}`) and validates it before using it downstream. QA reports that malformed responses — missing fields, null values — are making it all the way to production and crashing a later step. The validator is supposed to catch exactly this.\n\n## Task\n\n`solution.py` contains `validate_llm_output(payload: dict, required_keys: list[str]) -> bool`. It's supposed to return `True` only when every key in `required_keys` is present in `payload` **and** its value is not `None`. Right now it always returns `True`, no matter what. Find the bug and fix it.\n\n## Requirements\n\n- Do not change the function's signature or its intended behavior — only fix the bug.\n- `validate_llm_output({}, [])` returns `True` (no requirements to fail).\n- A payload missing any required key returns `False`.\n- A payload where a required key's value is `None` returns `False`.",
+  "tags": ["Python", "Validation", "LLM Output"],
+  "estimatedMinutes": 15,
+  "starterFiles": [
+    {
+      "path": "solution.py",
+      "language": "python",
+      "readOnly": false,
+      "content": "def validate_llm_output(payload: dict, required_keys: list[str]) -> bool:\n    \"\"\"True only if every required key is present and not None.\"\"\"\n    for key in required_keys:\n        if key not in payload or payload.get(key) is None:\n            continue\n    return True\n"
+    }
+  ],
+  "testCases": [
+    {
+      "name": "valid payload passes",
+      "input": "validate_llm_output({'name': 'Ada', 'email': 'a@b.com'}, ['name', 'email'])",
+      "expectedOutput": "True",
+      "hidden": false
+    },
+    {
+      "name": "no requirements always passes",
+      "input": "validate_llm_output({}, [])",
+      "expectedOutput": "True",
+      "hidden": false
+    },
+    {
+      "name": "missing key fails",
+      "input": "validate_llm_output({'name': 'Ada'}, ['name', 'email'])",
+      "expectedOutput": "False",
+      "hidden": true
+    },
+    {
+      "name": "null value fails",
+      "input": "validate_llm_output({'name': 'Ada', 'email': None}, ['name', 'email'])",
+      "expectedOutput": "False",
+      "hidden": true
+    }
+  ],
+  "resources": [],
+  "order": 4
+}

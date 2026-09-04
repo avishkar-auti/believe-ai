@@ -1,0 +1,25 @@
+{
+  "slug": "agent-tool-schema-design",
+  "title": "Design a Tool Schema for a Weather Agent",
+  "track": "agents",
+  "difficulty": "beginner",
+  "challengeType": "system-design",
+  "status": "published",
+  "summary": "Write a JSON tool/function schema for a weather-lookup tool that covers the parameters agents most often hallucinate.",
+  "description": "## Scenario\n\nYou're giving an LLM agent a `get_weather` tool so it can answer questions like \"what's the weather in Boston tomorrow?\" or \"should I bring an umbrella to my meeting in Tokyo Friday?\". Agents given a loosely-specified tool schema tend to hallucinate parameter values — inventing a `city_code` that doesn't exist, guessing a date format, or omitting units — instead of asking a clarifying question or failing predictably.\n\n## Task\n\nWrite a JSON tool schema (the kind passed to an LLM's function-calling API) for `get_weather` in `answer.md`, along with 2-3 sentences explaining the choices you made to prevent common failure modes.\n\n## Requirements\n\nYour schema must specify, at minimum:\n\n- A `location` parameter with a clear description of the expected format (e.g. \"city and country/state, e.g. 'Austin, TX'\" — not an ambiguous free-text field the model has to guess a convention for).\n- A `date` parameter with an explicit, unambiguous format (e.g. ISO 8601 `YYYY-MM-DD`) and a note on what value to use for \"today\"/\"tomorrow\"-style relative requests.\n- A `units` parameter (e.g. `celsius` / `fahrenheit`) with a sensible default, so the model doesn't have to guess or omit it.\n- Which parameters are `required` and which are optional, matching your written explanation.\n\nThere's no automated grading for this challenge — it's reviewed as a design exercise.",
+  "tags": ["Agents", "Tool Calling", "System Design"],
+  "estimatedMinutes": 20,
+  "starterFiles": [
+    {
+      "path": "answer.md",
+      "language": "markdown",
+      "readOnly": false,
+      "content": "# get_weather tool schema\n\n```json\n{\n  \"name\": \"get_weather\",\n  \"description\": \"\",\n  \"parameters\": {\n    \"type\": \"object\",\n    \"properties\": {},\n    \"required\": []\n  }\n}\n```\n\n## Why these choices\n"
+    }
+  ],
+  "testCases": [],
+  "resources": [
+    { "title": "OpenAI: Function calling guide", "url": "https://platform.openai.com/docs/guides/function-calling" }
+  ],
+  "order": 11
+}

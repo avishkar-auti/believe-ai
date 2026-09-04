@@ -1,0 +1,50 @@
+{
+  "slug": "rag-retrieval-reranking",
+  "title": "Re-rank Retrieved Chunks by Relevance",
+  "track": "rag",
+  "difficulty": "intermediate",
+  "challengeType": "coding",
+  "status": "published",
+  "summary": "Combine similarity score and keyword overlap into a single re-ranking score for retrieved chunks.",
+  "description": "## Scenario\n\nYour vector search returns the top 20 candidates by embedding similarity, but similarity alone misses exact keyword matches that matter a lot for precise queries (product codes, error messages, proper nouns). A common fix without standing up a full cross-encoder reranker: blend the vector similarity score with a lexical overlap score.\n\n## Task\n\nImplement in `solution.py`:\n\n- `keyword_overlap(query: str, text: str) -> float` — the fraction of the query's lowercased words that also appear in the lowercased text (0.0 to 1.0).\n- `rerank(query: str, candidates: list[dict], alpha: float) -> list[dict]` — each candidate is `{\"text\": str, \"similarity\": float}`. Return the candidates re-sorted (highest first) by `alpha * similarity + (1 - alpha) * keyword_overlap(query, text)`. Add the computed score to each returned dict under the key `\"score\"`.\n\n## Requirements\n\n- `keyword_overlap` with an empty query returns `0.0` (nothing to match).\n- `rerank` does not mutate the input list or its dicts — return new dicts.\n- Ties in the blended score are broken by original candidate order (stable sort).\n- `alpha` is always in `[0.0, 1.0]` — you don't need to validate it.",
+  "tags": ["RAG", "Retrieval", "Reranking"],
+  "estimatedMinutes": 30,
+  "starterFiles": [
+    {
+      "path": "solution.py",
+      "language": "python",
+      "readOnly": false,
+      "content": "def keyword_overlap(query: str, text: str) -> float:\n    \"\"\"Fraction of the query's words that also appear in text.\"\"\"\n    # TODO: implement\n    raise NotImplementedError\n\n\ndef rerank(query: str, candidates: list[dict], alpha: float) -> list[dict]:\n    \"\"\"Re-sort candidates by alpha*similarity + (1-alpha)*keyword_overlap.\n\n    Returns new dicts (input is not mutated) with an added \"score\" key.\n    \"\"\"\n    # TODO: implement\n    raise NotImplementedError\n"
+    }
+  ],
+  "testCases": [
+    {
+      "name": "keyword overlap counts matching words",
+      "input": "keyword_overlap('refund policy', 'our refund policy is 30 days')",
+      "expectedOutput": "1.0",
+      "hidden": false
+    },
+    {
+      "name": "empty query has zero overlap",
+      "input": "keyword_overlap('', 'anything')",
+      "expectedOutput": "0.0",
+      "hidden": false
+    },
+    {
+      "name": "reranks by blended score",
+      "input": "rerank('refund', [{'text':'no keyword match here','similarity':0.9},{'text':'refund refund refund','similarity':0.3}], 0.0)",
+      "expectedOutput": "[{'text': 'refund refund refund', 'similarity': 0.3, 'score': 1.0}, {'text': 'no keyword match here', 'similarity': 0.9, 'score': 0.0}]",
+      "hidden": true
+    },
+    {
+      "name": "does not mutate input",
+      "input": "(lambda c=[{'text': 'refund', 'similarity': 0.5}]: (rerank('refund', c, 0.5), c)[-1])()",
+      "expectedOutput": "[{'text': 'refund', 'similarity': 0.5}]",
+      "hidden": true
+    }
+  ],
+  "resources": [
+    { "title": "Pinecone: Rerankers and two-stage retrieval", "url": "https://www.pinecone.io/learn/series/rag/rerankers/" }
+  ],
+  "order": 7
+}

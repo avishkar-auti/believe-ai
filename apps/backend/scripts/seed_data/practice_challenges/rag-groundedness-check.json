@@ -1,0 +1,50 @@
+{
+  "slug": "rag-groundedness-check",
+  "title": "Detect an Ungrounded Answer",
+  "track": "rag",
+  "difficulty": "advanced",
+  "challengeType": "coding",
+  "status": "published",
+  "summary": "Implement a heuristic check that flags when a generated answer makes claims not supported by the retrieved context.",
+  "description": "## Scenario\n\nAn LLM answering from retrieved context will occasionally add a plausible-sounding sentence that isn't actually supported by anything retrieved — a classic RAG hallucination. Before reaching for a full LLM-as-judge faithfulness check (expensive, and not always reliable on its own), a deterministic lexical-overlap heuristic catches the most obvious cases cheaply and gives predictable, reproducible results.\n\n## Task\n\nImplement in `solution.py`:\n\n- `find_ungrounded_sentences(answer: str, context_chunks: list[str], threshold: float) -> list[str]` — splits `answer` into sentences (on `.`, `!`, `?`), and returns the sentences (in original order, original text, without the trailing punctuation) whose grounding score against the combined context is **below** `threshold`.\n\nDefine a sentence's grounding score as: lowercase the sentence and every context chunk, keep only words longer than 3 characters (\"significant\" words — this filters out connective noise like \"the\", \"is\", \"and\"), and compute `|significant words in the sentence that also appear anywhere in the context| / |significant words in the sentence|`.\n\n## Requirements\n\n- A sentence with zero significant words (e.g. \"Yes.\") is always considered grounded — it has nothing to check, so it's excluded from the result regardless of `threshold`.\n- Empty/whitespace-only \"sentences\" produced by the split (e.g. from trailing punctuation) are dropped, not scored.\n- `find_ungrounded_sentences(\"\", [...], 0.5)` returns `[]`.\n- Leading/trailing whitespace is stripped from each returned sentence.",
+  "tags": ["RAG", "Evaluation", "Faithfulness"],
+  "estimatedMinutes": 35,
+  "starterFiles": [
+    {
+      "path": "solution.py",
+      "language": "python",
+      "readOnly": false,
+      "content": "def find_ungrounded_sentences(answer: str, context_chunks: list[str], threshold: float) -> list[str]:\n    \"\"\"Return answer sentences (original order/text) whose lexical grounding\n    score against context_chunks is below `threshold`. Sentences with no\n    significant (>3 char) words are always considered grounded.\n    \"\"\"\n    # TODO: implement\n    raise NotImplementedError\n"
+    }
+  ],
+  "testCases": [
+    {
+      "name": "grounded sentence is not flagged",
+      "input": "find_ungrounded_sentences('Refunds are processed within 30 days.', ['Our refund policy allows returns within 30 days.'], 0.5)",
+      "expectedOutput": "[]",
+      "hidden": false
+    },
+    {
+      "name": "ungrounded sentence is flagged",
+      "input": "find_ungrounded_sentences('Refunds require a manager signature and passport photo.', ['Our refund policy allows returns within 30 days.'], 0.5)",
+      "expectedOutput": "['Refunds require a manager signature and passport photo']",
+      "hidden": true
+    },
+    {
+      "name": "short filler sentence is always grounded",
+      "input": "find_ungrounded_sentences('Yes.', ['completely unrelated context'], 0.9)",
+      "expectedOutput": "[]",
+      "hidden": true
+    },
+    {
+      "name": "empty answer",
+      "input": "find_ungrounded_sentences('', ['some context'], 0.5)",
+      "expectedOutput": "[]",
+      "hidden": true
+    }
+  ],
+  "resources": [
+    { "title": "Ragas: Faithfulness metric", "url": "https://docs.ragas.io/en/stable/concepts/metrics/available_metrics/faithfulness/" }
+  ],
+  "order": 9
+}

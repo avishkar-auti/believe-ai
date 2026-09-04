@@ -1,0 +1,56 @@
+{
+  "slug": "tokenize-and-count",
+  "title": "Token Counter for a Tiny Tokenizer",
+  "track": "python-for-ai",
+  "difficulty": "beginner",
+  "challengeType": "coding",
+  "status": "published",
+  "summary": "Split text into word/punctuation tokens and count frequencies — the first step in almost every NLP pipeline.",
+  "description": "## Scenario\n\nBefore any embedding model or LLM ever sees a document, something has to split it into tokens. Production tokenizers (BPE, WordPiece) are subword-based and complex — but a simple whitespace-and-punctuation tokenizer is still what you reach for when prototyping a keyword search, a frequency-based feature, or a quick text-cleaning step.\n\n## Task\n\nImplement two functions in `solution.py`:\n\n- `tokenize(text: str) -> list[str]` — lowercases the text and splits it into a list of word tokens, stripping punctuation. Words separated by any whitespace become separate tokens. Punctuation attached to a word (commas, periods, etc.) should be removed, not counted as its own token.\n- `token_frequencies(tokens: list[str]) -> dict[str, int]` — returns a mapping from token to how many times it appears, preserving first-seen order.\n\n## Requirements\n\n- `tokenize(\"\")` returns `[]`.\n- Punctuation (`.`, `,`, `!`, `?`, `:`, `;`, `\"`) is stripped from token edges.\n- Tokenization is case-insensitive (`\"The\"` and `\"the\"` are the same token).\n- `token_frequencies` never raises on an empty list — it returns `{}`.",
+  "tags": ["Python", "NLP", "Tokenization"],
+  "estimatedMinutes": 20,
+  "starterFiles": [
+    {
+      "path": "solution.py",
+      "language": "python",
+      "readOnly": false,
+      "content": "def tokenize(text: str) -> list[str]:\n    \"\"\"Lowercase, strip punctuation, split on whitespace.\"\"\"\n    # TODO: implement\n    raise NotImplementedError\n\n\ndef token_frequencies(tokens: list[str]) -> dict[str, int]:\n    \"\"\"Count occurrences of each token, preserving first-seen order.\"\"\"\n    # TODO: implement\n    raise NotImplementedError\n"
+    }
+  ],
+  "testCases": [
+    {
+      "name": "tokenizes a simple sentence",
+      "input": "tokenize(\"The quick brown fox.\")",
+      "expectedOutput": "['the', 'quick', 'brown', 'fox']",
+      "hidden": false
+    },
+    {
+      "name": "handles empty string",
+      "input": "tokenize(\"\")",
+      "expectedOutput": "[]",
+      "hidden": false
+    },
+    {
+      "name": "strips mixed punctuation",
+      "input": "tokenize(\"Well, that's odd!\")",
+      "expectedOutput": "['well', \"that's\", 'odd']",
+      "hidden": true
+    },
+    {
+      "name": "counts frequencies in first-seen order",
+      "input": "token_frequencies(['a', 'b', 'a', 'c', 'b', 'a'])",
+      "expectedOutput": "{'a': 3, 'b': 2, 'c': 1}",
+      "hidden": true
+    },
+    {
+      "name": "empty token list",
+      "input": "token_frequencies([])",
+      "expectedOutput": "{}",
+      "hidden": true
+    }
+  ],
+  "resources": [
+    { "title": "Hugging Face: Tokenizer summary", "url": "https://huggingface.co/docs/transformers/tokenizer_summary" }
+  ],
+  "order": 1
+}

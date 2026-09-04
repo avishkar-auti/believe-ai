@@ -1,0 +1,54 @@
+{
+  "slug": "prompt-template-engine",
+  "title": "Build a Minimal Prompt Template Engine",
+  "track": "python-for-ai",
+  "difficulty": "intermediate",
+  "challengeType": "coding",
+  "status": "published",
+  "summary": "Render {{variable}}-style prompt templates and raise a clear error when a required variable is missing.",
+  "description": "## Scenario\n\nMost prompt-engineering codebases eventually grow a small templating layer: a prompt is written once with placeholders, and filled in with different values per request. A silent typo in a variable name (or a caller forgetting to pass one) should fail loudly — not silently send a broken prompt to an expensive LLM call.\n\n## Task\n\nImplement in `solution.py`:\n\n- `render_template(template: str, variables: dict[str, str]) -> str` — replaces every `{{name}}` placeholder in `template` with `variables[\"name\"]`.\n- If the template references a variable that isn't in `variables`, raise `ValueError` with a message that includes the missing variable's name.\n\n## Requirements\n\n- Placeholders may have surrounding whitespace: `{{ name }}` and `{{name}}` both work.\n- A variable passed in `variables` but never referenced in the template is simply ignored — not an error.\n- The same variable may appear more than once in the template.\n- A template with no placeholders is returned unchanged.",
+  "tags": ["Python", "Prompt Engineering"],
+  "estimatedMinutes": 25,
+  "starterFiles": [
+    {
+      "path": "solution.py",
+      "language": "python",
+      "readOnly": false,
+      "content": "def render_template(template: str, variables: dict[str, str]) -> str:\n    \"\"\"Replace every {{name}} placeholder with variables[\"name\"].\n\n    Raises ValueError naming the variable if a referenced placeholder is\n    missing from `variables`.\n    \"\"\"\n    # TODO: implement\n    raise NotImplementedError\n"
+    }
+  ],
+  "testCases": [
+    {
+      "name": "renders a simple template",
+      "input": "render_template('Hello, {{name}}!', {'name': 'Ada'})",
+      "expectedOutput": "'Hello, Ada!'",
+      "hidden": false
+    },
+    {
+      "name": "handles whitespace inside braces",
+      "input": "render_template('Hi {{ name }}', {'name': 'Ada'})",
+      "expectedOutput": "'Hi Ada'",
+      "hidden": false
+    },
+    {
+      "name": "raises on missing variable",
+      "input": "render_template('Hi {{name}}', {})",
+      "expectedOutput": "ValueError: missing variable 'name'",
+      "hidden": true
+    },
+    {
+      "name": "repeats the same variable",
+      "input": "render_template('{{x}}-{{x}}', {'x': '5'})",
+      "expectedOutput": "'5-5'",
+      "hidden": true
+    },
+    {
+      "name": "unused variables are ignored",
+      "input": "render_template('static text', {'unused': '1'})",
+      "expectedOutput": "'static text'",
+      "hidden": true
+    }
+  ],
+  "resources": [],
+  "order": 5
+}

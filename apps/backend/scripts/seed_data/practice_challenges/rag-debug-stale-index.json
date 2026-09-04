@@ -1,0 +1,42 @@
+{
+  "slug": "rag-debug-stale-index",
+  "title": "Debug a Stale Vector Index",
+  "track": "rag",
+  "difficulty": "intermediate",
+  "challengeType": "debugging",
+  "status": "published",
+  "summary": "A RAG pipeline keeps returning outdated document versions after re-ingestion — find the bug in the upsert logic.",
+  "description": "## Scenario\n\nUsers report that after editing a knowledge-base article and re-running ingestion, the assistant still answers with the *old* version of the article — sometimes for days. Ingestion logs show no errors, and the re-ingestion job clearly runs and \"upserts\" the updated document. The bug is in what \"upsert\" actually does.\n\n## Task\n\n`solution.py` contains `upsert_document(index: dict, doc_id: str, content: str, embedding: list[float]) -> dict`, meant to insert a **new** entry, or **overwrite** an existing entry for the same `doc_id` with the new content/embedding, then return the updated index. Find the bug and fix it.\n\n## Requirements\n\n- Do not change the function's signature.\n- `upsert_document` mutates and returns the same `index` dict it was given (not a copy).\n- Calling it twice with the same `doc_id` but different `content`/`embedding` must leave the index with only the **second** call's values for that id.\n- Calling it with a new `doc_id` adds a new entry without disturbing existing ones.",
+  "tags": ["RAG", "Vector Index", "Debugging"],
+  "estimatedMinutes": 20,
+  "starterFiles": [
+    {
+      "path": "solution.py",
+      "language": "python",
+      "readOnly": false,
+      "content": "def upsert_document(index: dict, doc_id: str, content: str, embedding: list[float]) -> dict:\n    \"\"\"Insert or overwrite the entry for doc_id, mutating and returning index.\"\"\"\n    index.setdefault(doc_id, {\"content\": content, \"embedding\": embedding})\n    return index\n"
+    }
+  ],
+  "testCases": [
+    {
+      "name": "inserts a new document",
+      "input": "upsert_document({}, 'doc1', 'hello', [0.1, 0.2])",
+      "expectedOutput": "{'doc1': {'content': 'hello', 'embedding': [0.1, 0.2]}}",
+      "hidden": false
+    },
+    {
+      "name": "re-ingesting the same id overwrites content",
+      "input": "(lambda idx={}: (upsert_document(idx, 'doc1', 'old', [0.0]), upsert_document(idx, 'doc1', 'new', [1.0]), idx)[-1])()",
+      "expectedOutput": "{'doc1': {'content': 'new', 'embedding': [1.0]}}",
+      "hidden": true
+    },
+    {
+      "name": "adding a second document does not disturb the first",
+      "input": "(lambda idx={}: (upsert_document(idx, 'doc1', 'a', [0.0]), upsert_document(idx, 'doc2', 'b', [1.0]), idx)[-1])()",
+      "expectedOutput": "{'doc1': {'content': 'a', 'embedding': [0.0]}, 'doc2': {'content': 'b', 'embedding': [1.0]}}",
+      "hidden": true
+    }
+  ],
+  "resources": [],
+  "order": 10
+}

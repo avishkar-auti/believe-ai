@@ -1,0 +1,56 @@
+{
+  "slug": "cosine-similarity-search",
+  "title": "Cosine Similarity Top-K Search",
+  "track": "python-for-ai",
+  "difficulty": "beginner",
+  "challengeType": "coding",
+  "status": "published",
+  "summary": "Implement cosine similarity and use it to find the top-K most similar vectors — pure Python, no numpy.",
+  "description": "## Scenario\n\nEvery vector search system — from a toy semantic search demo to a production vector database — ultimately ranks candidates by some similarity function. Cosine similarity is the most common one for embeddings, because it measures the angle between two vectors and ignores their magnitude.\n\nYou won't have numpy available here — the point is to understand exactly what the vector math is doing underneath the library call.\n\n## Task\n\nImplement in `solution.py`:\n\n- `cosine_similarity(a: list[float], b: list[float]) -> float` — the cosine similarity between two equal-length vectors.\n- `top_k_similar(query: list[float], candidates: list[list[float]], k: int) -> list[int]` — returns the **indices** of the `k` candidates most similar to `query`, ordered from most to least similar.\n\n## Requirements\n\n- `cosine_similarity` returns a float in `[-1.0, 1.0]` (allow for floating-point rounding).\n- If either vector is all zeros, `cosine_similarity` returns `0.0` (undefined angle, not a division-by-zero crash).\n- `top_k_similar` never returns more indices than there are candidates, even if `k` exceeds `len(candidates)`.\n- Ties are broken by the candidate's original index (lower index first).",
+  "tags": ["Python", "Embeddings", "Vector Search"],
+  "estimatedMinutes": 20,
+  "starterFiles": [
+    {
+      "path": "solution.py",
+      "language": "python",
+      "readOnly": false,
+      "content": "def cosine_similarity(a: list[float], b: list[float]) -> float:\n    \"\"\"Cosine of the angle between two equal-length vectors.\"\"\"\n    # TODO: implement\n    raise NotImplementedError\n\n\ndef top_k_similar(query: list[float], candidates: list[list[float]], k: int) -> list[int]:\n    \"\"\"Indices of the k most similar candidates to `query`, best first.\"\"\"\n    # TODO: implement\n    raise NotImplementedError\n"
+    }
+  ],
+  "testCases": [
+    {
+      "name": "identical vectors have similarity 1.0",
+      "input": "cosine_similarity([1, 0, 0], [1, 0, 0])",
+      "expectedOutput": "1.0",
+      "hidden": false
+    },
+    {
+      "name": "orthogonal vectors have similarity 0.0",
+      "input": "cosine_similarity([1, 0], [0, 1])",
+      "expectedOutput": "0.0",
+      "hidden": false
+    },
+    {
+      "name": "zero vector does not crash",
+      "input": "cosine_similarity([0, 0, 0], [1, 2, 3])",
+      "expectedOutput": "0.0",
+      "hidden": true
+    },
+    {
+      "name": "top_k picks the closest vectors",
+      "input": "top_k_similar([1, 0], [[0, 1], [1, 0], [0.9, 0.1]], 2)",
+      "expectedOutput": "[1, 2]",
+      "hidden": true
+    },
+    {
+      "name": "k larger than candidate count",
+      "input": "top_k_similar([1, 0], [[1, 0]], 5)",
+      "expectedOutput": "[0]",
+      "hidden": true
+    }
+  ],
+  "resources": [
+    { "title": "Pinecone: Vector similarity explained", "url": "https://www.pinecone.io/learn/vector-similarity/" }
+  ],
+  "order": 2
+}

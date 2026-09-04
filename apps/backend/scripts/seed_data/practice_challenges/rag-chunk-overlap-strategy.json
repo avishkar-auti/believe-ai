@@ -1,0 +1,25 @@
+{
+  "slug": "rag-chunk-overlap-strategy",
+  "title": "Choose a Chunk & Overlap Strategy",
+  "track": "rag",
+  "difficulty": "beginner",
+  "challengeType": "system-design",
+  "status": "published",
+  "summary": "Decide chunk size and overlap for two very different document types and justify the tradeoffs.",
+  "description": "## Scenario\n\nYou're setting up ingestion for two very different corpora in the same RAG system:\n\n1. **Long-form legal contracts** — dense, formally structured, individual clauses often matter more than surrounding prose, and users ask precise questions (\"what's the termination notice period?\").\n2. **A short internal FAQ** — each entry is already a self-contained question/answer pair, rarely longer than a paragraph.\n\n## Task\n\nWrite your answer in `answer.md`. For **each** corpus, specify:\n\n- A chunk size (in tokens) and overlap (in tokens), with your reasoning.\n- What you'd use as the chunking boundary (fixed token count? sentence boundaries? section headers?) and why.\n- One concrete failure mode your choice avoids, and one tradeoff it accepts.\n\n## Requirements\n\n- Your two strategies must be meaningfully different — a single one-size-fits-all answer doesn't address the scenario.\n- Ground every choice in something specific about the corpus (structure, query pattern, document length) — not a generic \"smaller chunks are usually better\" statement.\n- Keep it to roughly 150–300 words per corpus.\n\nThere's no automated grading for this challenge — it's reviewed as a design exercise, the same way a debugging or coding challenge tests implementation skill.",
+  "tags": ["RAG", "Chunking", "System Design"],
+  "estimatedMinutes": 20,
+  "starterFiles": [
+    {
+      "path": "answer.md",
+      "language": "markdown",
+      "readOnly": false,
+      "content": "# Chunk & Overlap Strategy\n\n## Legal contracts\n\nChunk size:\nOverlap:\nBoundary:\nReasoning:\n\n## Internal FAQ\n\nChunk size:\nOverlap:\nBoundary:\nReasoning:\n"
+    }
+  ],
+  "testCases": [],
+  "resources": [
+    { "title": "Pinecone: Chunking strategies for LLM applications", "url": "https://www.pinecone.io/learn/chunking-strategies/" }
+  ],
+  "order": 6
+}

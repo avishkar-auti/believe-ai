@@ -1,0 +1,50 @@
+{
+  "slug": "agent-react-loop",
+  "title": "Implement a Minimal ReAct Loop",
+  "track": "agents",
+  "difficulty": "intermediate",
+  "challengeType": "coding",
+  "status": "published",
+  "summary": "Build a Thought → Action → Observation loop against a mocked tool interface, bounded by a max-step budget.",
+  "description": "## Scenario\n\nEvery tool-using agent, however sophisticated, is built on the same core loop: the model decides on an action, the action runs against a tool, the result feeds back in, and this repeats until the model decides it has enough information to answer — or a step budget runs out and the loop has to stop rather than run forever.\n\nTo test the loop mechanics in isolation from an actual LLM, you're given a pre-scripted sequence of decisions (`step_plan`) standing in for what a real model would decide at each turn.\n\n## Task\n\nImplement in `solution.py`:\n\n- `run_react_loop(tools: dict[str, dict[str, str]], step_plan: list[tuple[str, str]], max_steps: int) -> str`\n\nFor each `(tool_name, tool_input)` pair in `step_plan`, in order, up to `max_steps` steps total:\n\n- If `tool_name == \"final_answer\"`, stop immediately — do **not** treat it as a tool call — and return `tool_input` as the answer.\n- Otherwise, look up the observation as `tools[tool_name][tool_input]` and continue to the next step (the observation isn't returned from this function — in a real agent it would be fed back into the next prompt, but here you just need to advance the loop correctly).\n\n## Requirements\n\n- If `step_plan` is exhausted, or `max_steps` steps have been taken, without ever hitting `\"final_answer\"`, return the literal string `\"No answer produced\"`.\n- A `\"final_answer\"` step never counts against needing a tool lookup, even on the very first step.\n- Steps beyond `max_steps` are never executed, even if `step_plan` has more entries.",
+  "tags": ["Agents", "ReAct", "Tool Calling"],
+  "estimatedMinutes": 30,
+  "starterFiles": [
+    {
+      "path": "solution.py",
+      "language": "python",
+      "readOnly": false,
+      "content": "def run_react_loop(tools: dict[str, dict[str, str]], step_plan: list[tuple[str, str]], max_steps: int) -> str:\n    \"\"\"Execute a scripted Thought->Action->Observation loop.\n\n    Stops and returns tool_input immediately when tool_name == \"final_answer\".\n    Returns \"No answer produced\" if the loop runs out of steps first.\n    \"\"\"\n    # TODO: implement\n    raise NotImplementedError\n"
+    }
+  ],
+  "testCases": [
+    {
+      "name": "looks up a tool then returns the final answer",
+      "input": "run_react_loop({'lookup': {'weather': 'sunny'}}, [('lookup', 'weather'), ('final_answer', 'It is sunny.')], 5)",
+      "expectedOutput": "'It is sunny.'",
+      "hidden": false
+    },
+    {
+      "name": "final_answer as the first step needs no tool lookup",
+      "input": "run_react_loop({}, [('final_answer', 'done')], 5)",
+      "expectedOutput": "'done'",
+      "hidden": false
+    },
+    {
+      "name": "stops when max_steps is exhausted before final_answer",
+      "input": "run_react_loop({'lookup': {'weather': 'sunny'}}, [('lookup', 'weather'), ('final_answer', 'It is sunny.')], 1)",
+      "expectedOutput": "'No answer produced'",
+      "hidden": true
+    },
+    {
+      "name": "empty step_plan produces no answer",
+      "input": "run_react_loop({}, [], 5)",
+      "expectedOutput": "'No answer produced'",
+      "hidden": true
+    }
+  ],
+  "resources": [
+    { "title": "ReAct: Synergizing Reasoning and Acting in Language Models", "url": "https://arxiv.org/abs/2210.03629" }
+  ],
+  "order": 12
+}
