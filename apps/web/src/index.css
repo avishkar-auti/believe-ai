@@ -1,10 +1,106 @@
 @import "@fontsource-variable/plus-jakarta-sans";
+@import "@fontsource-variable/bricolage-grotesque";
 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 @layer base {
+  :root {
+    /* Semantic surface/text tokens, used across the whole app. Cool
+       lavender-tinted neutrals (not warm cream — that was tuned for a
+       different reference) so the canvas reads as one family with the
+       violet accent, instead of two unrelated color decisions. RGB triplets
+       so Tailwind's opacity modifiers work (e.g. bg-fg/[0.05]). Flip under
+       .dark. */
+    --fg: 23 20 31;
+    --fg-muted: 100 95 115;
+    --fg-subtle: 150 145 165;
+    --accent: 124 58 237;
+    --accent-soft: 237 233 254;
+    --accent-fg: 255 255 255;
+    --accent-hover: 109 40 217;
+    --positive: 111 160 50;
+    --critical: 220 38 38;
+    --caution: 217 119 6;
+    --informative: 37 99 235;
+    --line: 228 225 240;
+    --line-strong: 208 203 230;
+    /* Idle scrollbar-thumb color for .sidebar-scroll — not derived from
+       fg-muted/fg-subtle, the requested value sits between the two. Hover
+       state reuses the real --accent token directly instead of a separate
+       hardcoded purple, so it always matches the brand color exactly. */
+    --scrollbar-thumb-idle: 120 116 145;
+    --scrollbar-thumb-idle-alpha: 0.24;
+    /* Base + 4-step elevation scale for panel-heavy canvases (design studio,
+       campaigns). Pages using it force the `dark` class on their own root so
+       they read as an always-dark tool regardless of the app-wide theme. */
+    --bg: 246 245 250;
+    --surface: 255 255 255;
+    --surface-2: 240 238 247;
+    --surface-3: 230 227 242;
+    --surface-4: 255 255 255;
+    /* Ambient background glow intensity — lower in light mode so the blobs
+       stay a hint rather than a wash of color on a bright canvas. */
+    --ambient-opacity: 0.6;
+    /* Fixed glassmorphism blur radii — not theme-reactive, just a named
+       progression used by floating/backdrop-blurred panels. */
+    --liquid-blur-sm: 8px;
+    --liquid-blur-md: 16px;
+    --liquid-blur-lg: 24px;
+  }
+
+  /* Auth screens are light-only by design (brief-mandated), regardless of
+     the app-wide theme — mirrors Design Studio's opposite trick above of
+     forcing `.dark` on its own root. */
+  .theme-light {
+    --fg: 23 20 31;
+    --fg-muted: 100 95 115;
+    --fg-subtle: 150 145 165;
+    --accent: 124 58 237;
+    --accent-soft: 237 233 254;
+    --accent-fg: 255 255 255;
+    --accent-hover: 109 40 217;
+    --positive: 111 160 50;
+    --critical: 220 38 38;
+    --caution: 217 119 6;
+    --informative: 37 99 235;
+    --line: 228 225 240;
+    --line-strong: 208 203 230;
+    --scrollbar-thumb-idle: 120 116 145;
+    --scrollbar-thumb-idle-alpha: 0.24;
+    --bg: 246 245 250;
+    --surface: 255 255 255;
+    --surface-2: 240 238 247;
+    --surface-3: 230 227 242;
+    --surface-4: 255 255 255;
+    --ambient-opacity: 0.6;
+  }
+
+  .dark {
+    --fg: 237 235 245;
+    --fg-muted: 165 158 185;
+    --fg-subtle: 115 108 135;
+    --accent: 167 139 250;
+    --accent-soft: 46 26 92;
+    --accent-fg: 255 255 255;
+    --accent-hover: 196 181 253;
+    --positive: 163 211 77;
+    --critical: 248 113 113;
+    --caution: 245 158 11;
+    --informative: 96 165 250;
+    --line: 48 43 66;
+    --line-strong: 66 59 90;
+    --scrollbar-thumb-idle: 255 255 255;
+    --scrollbar-thumb-idle-alpha: 0.16;
+    --bg: 18 16 26;
+    --surface: 26 23 36;
+    --surface-2: 33 29 46;
+    --surface-3: 43 38 58;
+    --surface-4: 54 48 72;
+    --ambient-opacity: 1;
+  }
+
   html {
     @apply antialiased;
     scroll-behavior: smooth;
@@ -17,15 +113,17 @@
   }
 
   body {
-    @apply bg-ink-50 text-ink-900 dark:bg-ink-900 dark:text-ink-50;
+    @apply bg-bg text-fg;
     font-feature-settings: "ss01" 1;
   }
 
-  /* Headlines carry the design's tight, confident tracking. */
+  /* Headlines get the display face and the design's tight, confident
+     tracking — everything else (body copy, UI chrome, buttons) stays on
+     the sans face defined on body. */
   h1,
   h2,
   h3 {
-    @apply tracking-tight;
+    @apply font-display tracking-tight;
   }
 }
 
@@ -39,5 +137,98 @@
   /* Small rounded-square icon chip that sits above a feature card's title. */
   .icon-chip {
     @apply inline-flex h-9 w-9 items-center justify-center rounded-xl bg-ink-100 text-ink-700 dark:bg-ink-700 dark:text-ink-100;
+  }
+
+  /* Elevation tiers for panel-heavy screens (campaigns, design studio) — a
+     bare class rather than bg-surface-N so it composes with surface-edge
+     without repeating the pairing at every call site. */
+  .surface-1 {
+    @apply bg-surface;
+  }
+  .surface-2 {
+    @apply bg-surface-2;
+  }
+  .surface-3 {
+    @apply bg-surface-3;
+  }
+  .surface-4 {
+    @apply bg-surface-4;
+  }
+  .surface-edge {
+    @apply border border-line;
+  }
+
+  /* Subtle accent glow marking a panel as AI-touched content (proposals,
+     analysis, drafting placeholders) — layers on top of a surface-N. */
+  .ai-edge {
+    box-shadow:
+      0 0 0 1px rgb(var(--accent) / 0.18),
+      0 8px 20px -12px rgb(var(--accent) / 0.35);
+  }
+
+  /* The Believe Intelligence Layer — a slow breathing glow, added alongside
+     .ai-edge (not replacing it) only while a surface is actively generating
+     right now. Never decorative on idle AI surfaces. */
+  .ai-edge-active {
+    animation: ai-pulse 2.4s ease-in-out infinite;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .ai-edge-active {
+      animation: none;
+    }
+  }
+
+  /* Thin, quiet scrollbar for the sidebar's own scrollable nav region —
+     idle state is barely-there (per --scrollbar-thumb-idle/-alpha above),
+     hover brings it up to the real accent color. Firefox has no equivalent
+     of ::-webkit-scrollbar-button, so there's nothing to hide there; it
+     simply never draws native arrow buttons under scrollbar-width: thin. */
+  .sidebar-scroll {
+    scrollbar-width: thin;
+    scrollbar-color: rgb(var(--scrollbar-thumb-idle) / var(--scrollbar-thumb-idle-alpha)) transparent;
+  }
+  .sidebar-scroll::-webkit-scrollbar {
+    width: 3px;
+  }
+  .sidebar-scroll:hover::-webkit-scrollbar {
+    width: 4px;
+  }
+  .sidebar-scroll::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .sidebar-scroll::-webkit-scrollbar-thumb {
+    background: rgb(var(--scrollbar-thumb-idle) / var(--scrollbar-thumb-idle-alpha));
+    border-radius: 999px;
+    border: none;
+    transition: background-color 180ms ease;
+  }
+  .sidebar-scroll:hover::-webkit-scrollbar-thumb,
+  .sidebar-scroll:focus-within::-webkit-scrollbar-thumb {
+    background: rgb(var(--accent) / 0.42);
+  }
+  .sidebar-scroll::-webkit-scrollbar-button {
+    display: none;
+    width: 0;
+    height: 0;
+  }
+  .sidebar-scroll::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+}
+
+@layer utilities {
+  @keyframes ai-pulse {
+    0%,
+    100% {
+      box-shadow:
+        0 0 0 1px rgb(var(--accent) / 0.18),
+        0 8px 20px -12px rgb(var(--accent) / 0.35);
+    }
+    50% {
+      box-shadow:
+        0 0 0 1px rgb(var(--accent) / 0.35),
+        0 10px 26px -10px rgb(var(--accent) / 0.55);
+    }
   }
 }
