@@ -8,10 +8,14 @@ import { Input } from "../../components/ui/Input.js";
 import { Card, CardBody } from "../../components/ui/Card.js";
 import { GoogleIcon } from "./GoogleIcon.js";
 import { cn } from "../../lib/cn.js";
+import { AuthShell } from "./AuthShell.js";
+import { AuthHeroPanel } from "./AuthHeroPanel.js";
+import { ProductPreviewCard } from "./ProductPreviewCard.js";
+import { AUTH_PREVIEW_CARDS } from "./authPreviewData.js";
 
 const fieldStagger = {
   hidden: {},
-  show: { transition: { staggerChildren: 0.06 } },
+  show: { transition: { staggerChildren: 0.06, delayChildren: 0.15 } },
 };
 
 const fieldItem = {
@@ -59,11 +63,34 @@ export function SignupPage() {
   }
 
   return (
-    <motion.div initial="hidden" animate="show" variants={fieldStagger}>
-      <motion.div variants={fieldItem}>
-        <Card className="shadow-lift">
-          <CardBody className="space-y-5">
+    <AuthShell
+      hero={
+        <AuthHeroPanel
+          heading={
+            <>
+              One workspace for
+              <br />
+              everything you&rsquo;re
+              <br />
+              working toward.
+            </>
+          }
+          paragraph="AI tools, smart workflows, and real opportunities — all in one place."
+        />
+      }
+      preview={AUTH_PREVIEW_CARDS.map((card, i) => (
+        <ProductPreviewCard key={card.key} card={card} index={i} />
+      ))}
+    >
+      <Card className="shadow-lift">
+        <CardBody className="space-y-5">
+          <motion.div initial="hidden" animate="show" variants={fieldStagger}>
             <motion.div variants={fieldItem}>
+              <h2 className="text-[20px] font-semibold text-fg">Create your account</h2>
+              <p className="mt-1 text-[13px] text-fg-subtle">Get started in less than a minute.</p>
+            </motion.div>
+
+            <motion.div variants={fieldItem} className="mt-5">
               <Button
                 type="button"
                 variant="secondary"
@@ -76,18 +103,18 @@ export function SignupPage() {
               </Button>
             </motion.div>
 
-            <motion.div variants={fieldItem} className="flex items-center gap-3 text-xs text-ink-400">
-              <div className="h-px flex-1 bg-ink-200 dark:bg-ink-700" />
+            <motion.div variants={fieldItem} className="mt-5 flex items-center gap-3 text-xs text-fg-subtle">
+              <div className="h-px flex-1 bg-line" />
               or
-              <div className="h-px flex-1 bg-ink-200 dark:bg-ink-700" />
+              <div className="h-px flex-1 bg-line" />
             </motion.div>
 
-            <form className="space-y-3" onSubmit={handleSubmit}>
+            <form className="mt-5 space-y-3" onSubmit={handleSubmit}>
               <motion.div variants={fieldItem} className="relative">
-                <Mail className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-300 dark:text-ink-600" />
+                <Mail className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-fg-subtle" />
                 <Input
                   type="email"
-                  placeholder="Email"
+                  placeholder="Email address"
                   className="pl-10"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
@@ -98,7 +125,7 @@ export function SignupPage() {
 
               <motion.div variants={fieldItem}>
                 <div className="relative">
-                  <Lock className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-300 dark:text-ink-600" />
+                  <Lock className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-fg-subtle" />
                   <Input
                     type={showPassword ? "text" : "password"}
                     placeholder="Password"
@@ -113,7 +140,7 @@ export function SignupPage() {
                     type="button"
                     onClick={() => setShowPassword((v) => !v)}
                     aria-label={showPassword ? "Hide password" : "Show password"}
-                    className="absolute right-3.5 top-1/2 -translate-y-1/2 text-ink-300 transition-colors hover:text-ink-600 dark:text-ink-600 dark:hover:text-ink-300"
+                    className="absolute right-3.5 top-1/2 -translate-y-1/2 text-fg-subtle transition-colors hover:text-fg"
                   >
                     {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </button>
@@ -121,11 +148,7 @@ export function SignupPage() {
                 <p
                   className={cn(
                     "mt-1.5 flex items-center gap-1.5 text-xs transition-colors",
-                    password.length === 0
-                      ? "text-ink-400"
-                      : passwordValid
-                        ? "text-lime-600 dark:text-lime-400"
-                        : "text-ink-400",
+                    password.length === 0 ? "text-fg-subtle" : passwordValid ? "text-positive" : "text-fg-subtle",
                   )}
                 >
                   {passwordValid && <Check className="h-3 w-3" />}
@@ -139,7 +162,7 @@ export function SignupPage() {
                     initial={{ opacity: 0, height: 0 }}
                     animate={{ opacity: 1, height: "auto" }}
                     exit={{ opacity: 0, height: 0 }}
-                    className="flex items-start gap-2 overflow-hidden rounded-xl bg-red-50 px-3 py-2.5 text-sm text-red-700 dark:bg-red-950/40 dark:text-red-400"
+                    className="flex items-start gap-2 overflow-hidden rounded-xl bg-critical/10 px-3 py-2.5 text-sm text-critical"
                   >
                     <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
                     {error}
@@ -154,15 +177,15 @@ export function SignupPage() {
               </motion.div>
             </form>
 
-            <motion.p variants={fieldItem} className="text-center text-sm text-ink-500 dark:text-ink-400">
+            <motion.p variants={fieldItem} className="mt-5 text-center text-sm text-fg-subtle">
               Already have an account?{" "}
-              <Link to="/login" className="font-medium text-brand-600 hover:text-brand-700 dark:text-brand-400">
+              <Link to="/login" className="font-medium text-accent hover:text-accent-hover">
                 Sign in
               </Link>
             </motion.p>
-          </CardBody>
-        </Card>
-      </motion.div>
-    </motion.div>
+          </motion.div>
+        </CardBody>
+      </Card>
+    </AuthShell>
   );
 }
