@@ -6,8 +6,8 @@ export async function fetchCareerFits() {
   return res.data;
 }
 
-export async function generateCareerFit(targetRole?: string) {
-  const res = await apiClient.post<CareerFit>("/career-fit", { targetRole });
+export async function generateCareerFit(targetRole?: string, resumeId?: string) {
+  const res = await apiClient.post<CareerFit>("/career-fit", { targetRole, resumeId });
   return res.data;
 }
 

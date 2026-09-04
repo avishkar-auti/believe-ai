@@ -15,11 +15,11 @@ router = APIRouter(prefix="/career", tags=["career"])
 async def career_fit_route(
     body: CareerFitApiRequest, settings: SettingsDep, db: DbDep, mongo_user_id: MongoUserIdDep, _user_id: UserIdDep
 ) -> CareerFitResult:
-    return await analyze_career_fit_for_user(settings, db, mongo_user_id, body.targetRole)
+    return await analyze_career_fit_for_user(settings, db, mongo_user_id, body.targetRole, body.resumeId)
 
 
 @router.post("/roadmap", response_model=RoadmapResult)
 async def roadmap_route(
     body: RoadmapApiRequest, settings: SettingsDep, db: DbDep, mongo_user_id: MongoUserIdDep, _user_id: UserIdDep
 ) -> RoadmapResult:
-    return await build_roadmap_for_user(settings, db, mongo_user_id, body.goal, body.personalize)
+    return await build_roadmap_for_user(settings, db, mongo_user_id, body.goal, body.personalize, body.resumeId)

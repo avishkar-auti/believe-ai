@@ -24,7 +24,7 @@ async def list_career_fits_route(
 async def generate_career_fit_route(
     body: GenerateCareerFitInput, settings: SettingsDep, db: DbDep, mongo_user_id: MongoUserIdDep, _user_id: UserIdDep
 ) -> CareerFitDto:
-    return await career_fit_service.generate_and_save(settings, db, mongo_user_id, body.targetRole)
+    return await career_fit_service.generate_and_save(settings, db, mongo_user_id, body.targetRole, body.resumeId)
 
 
 @router.get("/{career_fit_id}", response_model=CareerFitDto)

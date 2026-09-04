@@ -1,23 +1,35 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useLocation } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { motion } from "framer-motion";
-import { Target, Trash2 } from "lucide-react";
-import { Button } from "../../components/ui/Button.js";
-import { Input } from "../../components/ui/Input.js";
-import { Card, CardBody, CardHeader } from "../../components/ui/Card.js";
-import { Badge } from "../../components/ui/Badge.js";
+import { Target } from "lucide-react";
 import { EmptyState } from "../../components/ui/EmptyState.js";
 import { Spinner } from "../../components/ui/Spinner.js";
 import { deleteCareerFit, fetchCareerFits, generateCareerFit } from "./careerFitApi.js";
+import { fetchResumes } from "../resumes/resumeApi.js";
+import { CareerFitAnalyzer } from "./CareerFitAnalyzer.js";
+import { CareerFitReport } from "./CareerFitReport.js";
 
 export function CareerFitPage() {
   const queryClient = useQueryClient();
+  const location = useLocation();
   const [targetRole, setTargetRole] = useState("");
+  const [resumeId, setResumeId] = useState("");
+
+  // Seeded once from a Job Board "Career Fit" deep-link (see features/jobs/CareerActions.tsx).
+  useEffect(() => {
+    const state = location.state as { targetRole?: string; resumeId?: string } | null;
+    if (state?.targetRole) setTargetRole(state.targetRole);
+    if (state?.resumeId) setResumeId(state.resumeId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- seed once from arrival state, not on every navigation
+  }, []);
 
   const { data, isLoading } = useQuery({ queryKey: ["career-fit"], queryFn: fetchCareerFits });
+  const { data: resumes } = useQuery({ queryKey: ["resumes"], queryFn: fetchResumes });
+  const selectedResumeId = resumeId || resumes?.find((r) => r.isPrimary)?.id;
 
   const generateMutation = useMutation({
-    mutationFn: () => generateCareerFit(targetRole || undefined),
+    mutationFn: () => generateCareerFit(targetRole || undefined, selectedResumeId),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["career-fit"] });
       setTargetRole("");
@@ -30,101 +42,46 @@ export function CareerFitPage() {
   });
 
   return (
-    <div className="space-y-6">
+    <div className="max-w-content space-y-8">
       <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.35, ease: "easeOut" }}>
-        <h1 className="flex items-center gap-2 text-2xl font-semibold text-ink-900 dark:text-white">
-          <Target className="h-5 w-5 text-brand-500" /> Career Fit
+        <h1 className="flex items-center gap-2.5 text-h1 text-fg">
+          <Target className="h-6 w-6 text-accent" /> Career Fit
         </h1>
-        <p className="text-sm text-ink-500 dark:text-ink-400">
-          An honest read on your strengths and gaps, grounded in your uploaded resume.
+        <p className="mt-1.5 text-label font-normal text-fg-muted">
+          Understand how your experience aligns with your target role.
         </p>
       </motion.div>
 
-      <Card className="transition-shadow duration-300 hover:shadow-lift">
-        <CardBody className="flex flex-col gap-3 sm:flex-row">
-          <Input
-            placeholder="Target role (optional) — e.g. Senior Backend Engineer"
-            value={targetRole}
-            onChange={(e) => setTargetRole(e.target.value)}
-            className="flex-1"
-          />
-          <Button onClick={() => generateMutation.mutate()} disabled={generateMutation.isPending}>
-            {generateMutation.isPending ? "Analyzing…" : "Analyze my fit"}
-          </Button>
-        </CardBody>
-        {generateMutation.isError && (
-          <CardBody className="pt-0">
-            <p className="text-sm text-red-600">Couldn't generate an assessment — upload a resume first, then try again.</p>
-          </CardBody>
-        )}
-      </Card>
+      <CareerFitAnalyzer
+        targetRole={targetRole}
+        onTargetRoleChange={setTargetRole}
+        resumes={resumes}
+        selectedResumeId={selectedResumeId}
+        onSelectResume={setResumeId}
+        onAnalyze={() => generateMutation.mutate()}
+        analyzing={generateMutation.isPending}
+        error={generateMutation.isError}
+      />
 
       {isLoading ? (
         <div className="flex justify-center py-16">
-          <Spinner className="h-6 w-6 text-ink-400" />
+          <Spinner className="h-6 w-6 text-fg-subtle" />
         </div>
       ) : !data || data.items.length === 0 ? (
-        <EmptyState title="No assessments yet" description="Generate your first career-fit assessment above." />
+        <EmptyState
+          icon={<Target className="h-5 w-5" />}
+          title="No assessments yet"
+          description="Generate your first career-fit assessment above."
+        />
       ) : (
-        <div className="space-y-4">
-          {data.items.map((fit, i) => (
-            <motion.div
+        <div className="space-y-5">
+          {data.items.map((fit) => (
+            <CareerFitReport
               key={fit.id}
-              initial={{ opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.3, delay: i * 0.05, ease: "easeOut" }}
-            >
-            <Card className="transition-shadow duration-300 hover:shadow-lift">
-              <CardHeader className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-ink-900 dark:text-white">
-                    {fit.targetRole ?? "General assessment"}
-                  </p>
-                  <p className="text-xs text-ink-400">{new Date(fit.createdAt).toLocaleString()}</p>
-                </div>
-                <Button variant="ghost" size="sm" onClick={() => deleteMutation.mutate(fit.id)}>
-                  <Trash2 className="h-4 w-4" />
-                </Button>
-              </CardHeader>
-              <CardBody className="space-y-4">
-                <p className="text-sm text-ink-700 dark:text-ink-200">{fit.summary}</p>
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                  <div>
-                    <p className="mb-2 text-xs font-medium uppercase text-ink-400">Strengths</p>
-                    <div className="flex flex-wrap gap-1.5">
-                      {fit.strengths.map((s) => (
-                        <Badge key={s} tone="success">
-                          {s}
-                        </Badge>
-                      ))}
-                    </div>
-                  </div>
-                  <div>
-                    <p className="mb-2 text-xs font-medium uppercase text-ink-400">Skill gaps</p>
-                    <div className="flex flex-wrap gap-1.5">
-                      {fit.skillGaps.map((s) => (
-                        <Badge key={s} tone="warning">
-                          {s}
-                        </Badge>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-                {fit.suggestedRoles.length > 0 && (
-                  <div>
-                    <p className="mb-2 text-xs font-medium uppercase text-ink-400">Suggested roles</p>
-                    <div className="flex flex-wrap gap-1.5">
-                      {fit.suggestedRoles.map((r) => (
-                        <Badge key={r} tone="info">
-                          {r}
-                        </Badge>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </CardBody>
-            </Card>
-            </motion.div>
+              fit={fit}
+              onDelete={() => deleteMutation.mutate(fit.id)}
+              deleting={deleteMutation.isPending && deleteMutation.variables === fit.id}
+            />
           ))}
         </div>
       )}
