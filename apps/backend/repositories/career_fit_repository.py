@@ -15,9 +15,16 @@ async def create(
     strengths: list[str],
     skill_gaps: list[str],
     suggested_roles: list[str],
+    fit_score: int,
 ) -> CareerFit:
     doc = CareerFit(
-        userId=user_id, targetRole=target_role, summary=summary, strengths=strengths, skillGaps=skill_gaps, suggestedRoles=suggested_roles
+        userId=user_id,
+        targetRole=target_role,
+        summary=summary,
+        strengths=strengths,
+        skillGaps=skill_gaps,
+        suggestedRoles=suggested_roles,
+        fitScore=fit_score,
     )
     await doc.insert()
     return doc

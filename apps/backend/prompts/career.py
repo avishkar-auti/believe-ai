@@ -6,6 +6,7 @@ from __future__ import annotations
 from prompts.base import history_block, json_schema, log_prompt_version, untrusted_text, word_count
 from schemas.ai import (
     CareerFitRequest,
+    InterviewAnswerFeedbackRequest,
     InterviewCoachRequest,
     InterviewQuestionsRequest,
     ResumeChatRequest,
@@ -54,10 +55,19 @@ def build_career_fit_prompt(req: CareerFitRequest) -> str:
     depth = "2-3 strengths and 2-3 skill gaps" if words < 150 else "3-5 strengths and 2-4 skill gaps"
     lines = [
         "Analyze this resume and give an honest career-fit assessment.",
-        json_schema('{"summary": string, "strengths": string[], "skillGaps": string[], "suggestedRoles": string[]}'),
+        json_schema(
+            '{"summary": string, "strengths": string[], "skillGaps": string[], "suggestedRoles": string[], "fitScore": int(0-100)}'
+        ),
         "Base strengths and gaps only on what the resume actually shows — do not invent employers, tools, or skills not present.",
         f"The resume is {'brief' if words < 150 else 'detailed'} (~{words} words) — list {depth} accordingly; "
         "don't pad the list with generic filler just to hit a round number.",
+        "fitScore is your own real judgment of how strong a fit this resume is"
+        + (" for the target role, on a 0-100 scale" if req.targetRole else ", on a 0-100 scale (general market fit)")
+        + " — weigh depth and recency of relevant experience, breadth of matching skills, seniority/level "
+        "alignment, and career trajectory. This is NOT the ratio of strengths to gaps you listed above, and must "
+        "not default to a number near 50 — use the full range. A resume with strong, directly relevant experience "
+        "and few real gaps should score 80-95+; a genuine mismatch or very early-career resume against a senior "
+        "target should score below 40; most realistic cases fall unevenly in between depending on actual overlap.",
     ]
     if req.targetRole:
         lines.append(f"Evaluate specifically against this target role: {req.targetRole}")
@@ -113,6 +123,43 @@ def build_interview_questions_prompt(req: InterviewQuestionsRequest) -> str:
     ]
     if req.targetRole:
         lines.append(f"Tailor difficulty and focus toward this target role: {req.targetRole}")
+    if req.interviewType and req.interviewType != "mixed":
+        lines.append(f'Every question must be category "{req.interviewType}" — do not include any other category.')
+    if req.difficulty:
+        lines.append(f"Pitch every question at {req.difficulty} difficulty.")
+    if req.jobTitle:
+        company_suffix = f" at {req.jobCompany}" if req.jobCompany else ""
+        lines.append(f"This session is for a specific real opening: {req.jobTitle}{company_suffix}.")
+    if req.jobDescription:
+        lines.append("Ground questions in what this specific posting actually asks for, not just the resume in isolation.")
+        lines += untrusted_text("JOB DESCRIPTION", req.jobDescription)
+    lines += untrusted_text("RESUME", req.resumeText)
+    return "\n".join(lines)
+
+
+def build_interview_answer_feedback_prompt(req: InterviewAnswerFeedbackRequest) -> str:
+    log_prompt_version("interview_answer_feedback", PROMPT_VERSION)
+    lines = [
+        "Score this person's spoken/written answer to a single interview question, as an experienced interviewer would.",
+        json_schema(
+            '{"overallScore": int(0-100), "technicalAccuracy": int(0-100), "clarity": int(0-100), '
+            '"depth": int(0-100), "communication": int(0-100), "strengths": string[], "improvements": string[], '
+            '"suggestedAnswer": string}'
+        ),
+        "Score honestly against what a strong candidate would actually say — do not default to a flattering "
+        "score, and do not be harsh for its own sake either. A vague, generic, or incorrect answer should score low.",
+        "technicalAccuracy judges factual/technical correctness (for a behavioral question, judge the soundness "
+        "of the reasoning and example instead); clarity judges structure and ease of following; depth judges "
+        "specificity and evidence (concrete examples beat generalities); communication judges tone and concision.",
+        "strengths: 1-4 concrete things this specific answer did well (skip the list, i.e. empty array, if the "
+        "answer genuinely has none). improvements: 1-4 concrete, actionable gaps.",
+        "suggestedAnswer: a stronger model answer to this exact question, grounded in the resume below — never "
+        "invent experience, employers, or projects the resume doesn't show.",
+        f"Question ({req.category}): {req.question}",
+        f"Candidate's answer: {req.answer}",
+    ]
+    if req.targetRole:
+        lines.append(f"Target role: {req.targetRole}")
     lines += untrusted_text("RESUME", req.resumeText)
     return "\n".join(lines)
 

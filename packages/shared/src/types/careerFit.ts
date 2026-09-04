@@ -11,5 +11,6 @@ export interface CareerFit {
   strengths: string[];
   skillGaps: string[];
   suggestedRoles: string[];
+  fitScore: number;
   createdAt: string;
 }

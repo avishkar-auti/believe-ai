@@ -41,16 +41,17 @@ def _to_dto(doc: CareerFit) -> CareerFitDto:
         strengths=doc.strengths,
         skillGaps=doc.skillGaps,
         suggestedRoles=doc.suggestedRoles,
+        fitScore=doc.fitScore,
         createdAt=doc.createdAt.isoformat(),
     )
 
 
 async def analyze_career_fit_for_user(
-    settings: Settings, db: AsyncIOMotorDatabase, user_id: ObjectId, target_role: str | None
+    settings: Settings, db: AsyncIOMotorDatabase, user_id: ObjectId, target_role: str | None, resume_id: ObjectId | None = None
 ) -> CareerFitResult:
-    resume = await resumes_repository.find_by_user_id(db, user_id)
+    resume = await resumes_repository.resolve_for_user(db, user_id, resume_id)
     if not resume:
-        raise NotFoundError("No resume uploaded yet")
+        raise NotFoundError("No resume uploaded yet" if not resume_id else "Resume not found")
 
     resume_text = resume["content"]
     result = await analyze_career_fit(settings, CareerFitRequest(resumeText=resume_text, targetRole=target_role))
@@ -66,13 +67,13 @@ async def analyze_career_fit_for_user(
 
 
 async def generate_and_save(
-    settings: Settings, db: AsyncIOMotorDatabase, user_id: ObjectId, target_role: str | None
+    settings: Settings, db: AsyncIOMotorDatabase, user_id: ObjectId, target_role: str | None, resume_id: ObjectId | None = None
 ) -> CareerFitDto:
     """Mirrors apps/api's careerFit.service.ts's generate() — calls the AI
     generation above, then persists the result as its own history entry."""
-    result = await analyze_career_fit_for_user(settings, db, user_id, target_role)
+    result = await analyze_career_fit_for_user(settings, db, user_id, target_role, resume_id)
     doc = await career_fit_repository.create(
-        user_id, target_role, result.summary, result.strengths, result.skillGaps, result.suggestedRoles
+        user_id, target_role, result.summary, result.strengths, result.skillGaps, result.suggestedRoles, result.fitScore
     )
     return _to_dto(doc)
 

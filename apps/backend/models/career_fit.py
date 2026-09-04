@@ -18,6 +18,9 @@ class CareerFit(Document):
     strengths: list[str] = Field(default_factory=list)
     skillGaps: list[str] = Field(default_factory=list)
     suggestedRoles: list[str] = Field(default_factory=list)
+    # Default only backfills documents persisted before this field existed —
+    # every new assessment always sets a real LLM-scored value.
+    fitScore: int = 50
     createdAt: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
     class Settings:
