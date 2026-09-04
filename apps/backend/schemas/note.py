@@ -13,17 +13,29 @@ class NoteDto(BaseModel):
     content: dict[str, Any]
     folderId: str | None
     tags: list[str]
+    pinned: bool
+    archived: bool
+    linkedEntityType: str | None
+    linkedEntityId: str | None
+    linkedEntityLabel: str | None
     createdAt: str
     updatedAt: str
 
 
 class NoteSummaryDto(BaseModel):
-    """List-view shape — omits the full editor content, which can be large."""
+    """List-view shape — omits the full editor content, which can be large,
+    but includes a short plainText preview so the list can show a snippet."""
 
     id: str
     title: str
+    preview: str
     folderId: str | None
     tags: list[str]
+    pinned: bool
+    archived: bool
+    linkedEntityType: str | None
+    linkedEntityId: str | None
+    linkedEntityLabel: str | None
     updatedAt: str
 
 
@@ -32,6 +44,9 @@ class CreateNoteInput(BaseModel):
     content: dict[str, Any] = Field(default_factory=dict)
     folderId: str | None = None
     tags: list[str] = Field(default_factory=list)
+    linkedEntityType: str | None = None
+    linkedEntityId: str | None = None
+    linkedEntityLabel: str | None = None
 
 
 class UpdateNoteInput(BaseModel):
@@ -39,6 +54,14 @@ class UpdateNoteInput(BaseModel):
     content: dict[str, Any] | None = None
     folderId: str | None = None
     tags: list[str] | None = None
+    pinned: bool | None = None
+    archived: bool | None = None
+    linkedEntityType: str | None = None
+    linkedEntityId: str | None = None
+    linkedEntityLabel: str | None = None
+
+
+NoteView = Literal["active", "archived", "trash"]
 
 
 class NoteFolderDto(BaseModel):

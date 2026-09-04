@@ -21,9 +21,15 @@ function walk(node: DocNode | undefined): string {
   return parts.filter(Boolean).join(joiner);
 }
 
-export function extractPreviewText(content: Record<string, unknown>): string {
-  const text = walk(content as DocNode)
+/** Untruncated plain text — for feeding a whole note into an AI transform,
+ * where extractPreviewText's 150-char cap would throw away most of the note. */
+export function extractPlainText(content: Record<string, unknown>): string {
+  return walk(content as DocNode)
     .replace(/\s+/g, " ")
     .trim();
+}
+
+export function extractPreviewText(content: Record<string, unknown>): string {
+  const text = extractPlainText(content);
   return text.length <= PREVIEW_MAX_CHARS ? text : text.slice(0, PREVIEW_MAX_CHARS).replace(/\s+\S*$/, "") + "…";
 }

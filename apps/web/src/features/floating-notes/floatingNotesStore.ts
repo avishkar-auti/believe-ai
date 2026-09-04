@@ -10,16 +10,28 @@ export interface FloatEntry {
   // dragged anywhere, not just stacked in one corner.
   x: number;
   y: number;
+  // Resizable desktop window — omitted (falls back to DEFAULT_WIDTH/HEIGHT)
+  // until the user actually drags the resize handle once.
+  width?: number;
+  height?: number;
 }
 
-const WIDGET_WIDTH = 288; // matches the w-72 widget width
-const WIDGET_HEIGHT = 220; // rough default height, enough to avoid off-screen spawns
+export const DEFAULT_WIDTH = 340;
+export const DEFAULT_HEIGHT = 420;
+const MIN_WIDTH = 300;
+const MIN_HEIGHT = 320;
+const MAX_WIDTH = 480;
+const MAX_HEIGHT = 640;
 const STAGGER = 24;
+// Bottom margin large enough to clear a typical bottom control bar (Interview
+// Room's call controls, Design Studio's canvas prompt bar) even though the
+// default spawn position isn't route-aware — dragging still works everywhere.
+const BOTTOM_CLEARANCE = 104;
 
 function defaultPosition(existingCount: number): { x: number; y: number } {
   const stagger = (existingCount % 6) * STAGGER;
-  const x = Math.max(16, (typeof window !== "undefined" ? window.innerWidth : 1280) - WIDGET_WIDTH - 24 - stagger);
-  const y = Math.max(16, (typeof window !== "undefined" ? window.innerHeight : 800) - WIDGET_HEIGHT - 24 - stagger);
+  const x = Math.max(16, (typeof window !== "undefined" ? window.innerWidth : 1280) - DEFAULT_WIDTH - 24 - stagger);
+  const y = Math.max(16, (typeof window !== "undefined" ? window.innerHeight : 800) - DEFAULT_HEIGHT - BOTTOM_CLEARANCE - stagger);
   return { x, y };
 }
 
@@ -29,6 +41,11 @@ interface FloatingNotesState {
   unfloat: (noteId: string) => void;
   setMode: (noteId: string, mode: FloatMode) => void;
   move: (noteId: string, x: number, y: number) => void;
+  resize: (noteId: string, width: number, height: number) => void;
+}
+
+export function clampSize(width: number, height: number): { width: number; height: number } {
+  return { width: Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, width)), height: Math.min(MAX_HEIGHT, Math.max(MIN_HEIGHT, height)) };
 }
 
 // The app's first Zustand store — persisted to localStorage under the same
@@ -47,6 +64,7 @@ export const useFloatingNotesStore = create<FloatingNotesState>()(
       unfloat: (noteId) => set((state) => ({ floats: state.floats.filter((f) => f.noteId !== noteId) })),
       setMode: (noteId, mode) => set((state) => ({ floats: state.floats.map((f) => (f.noteId === noteId ? { ...f, mode } : f)) })),
       move: (noteId, x, y) => set((state) => ({ floats: state.floats.map((f) => (f.noteId === noteId ? { ...f, x, y } : f)) })),
+      resize: (noteId, width, height) => set((state) => ({ floats: state.floats.map((f) => (f.noteId === noteId ? { ...f, width, height } : f)) })),
     }),
     { name: "believe-ai:floating-notes" },
   ),

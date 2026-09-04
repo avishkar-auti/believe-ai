@@ -22,6 +22,11 @@ _ACTION_INSTRUCTIONS = {
     "summarize": "Summarize the following note text in a few concise sentences.",
     "fix_grammar": "Fix the grammar and spelling of the following note text without changing its meaning or content.",
     "generate_example": "Give one concrete, worked example that illustrates the following note text.",
+    "extract_action_items": (
+        "Extract every concrete action item, task, or follow-up mentioned in the following note text. "
+        "Respond as a Markdown checklist (one '- [ ] ...' line per item, imperative mood, no extra commentary). "
+        "If there are genuinely no action items, respond with a single line: '- [ ] (no action items found)'."
+    ),
 }
 
 

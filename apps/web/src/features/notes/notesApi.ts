@@ -11,6 +11,7 @@ import type {
   NoteTranscriptCleanupResult,
   NoteTransformAction,
   NoteTutorResult,
+  NoteView,
   RelatedNote,
   ReviewGrade,
   SavedFlashcard,
@@ -19,7 +20,7 @@ import type {
 } from "@believe-ai/shared";
 import { apiClient } from "../../lib/apiClient.js";
 
-export async function fetchNotes(params: { folderId?: string; tag?: string } = {}) {
+export async function fetchNotes(params: { folderId?: string; tag?: string; view?: NoteView } = {}) {
   const res = await apiClient.get<NoteSummary[]>("/notes/", { params });
   return res.data;
 }
@@ -39,8 +40,19 @@ export async function updateNote(id: string, input: UpdateNoteInput) {
   return res.data;
 }
 
+/** Soft delete — moves the note to trash. See permanentlyDeleteNote to
+ * actually remove it. */
 export async function deleteNote(id: string) {
   await apiClient.delete(`/notes/${id}`);
+}
+
+export async function restoreNote(id: string) {
+  const res = await apiClient.post<Note>(`/notes/${id}/restore`);
+  return res.data;
+}
+
+export async function permanentlyDeleteNote(id: string) {
+  await apiClient.delete(`/notes/${id}/permanent`);
 }
 
 export async function searchNotes(q: string) {

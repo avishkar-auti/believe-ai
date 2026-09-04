@@ -18,7 +18,7 @@ from core.logging import get_logger
 from models.note import Note, NoteChunk
 from repositories import note_repository
 from schemas.ai import EmbedTextsRequest
-from schemas.note import CreateNoteInput, NoteDto, NoteSummaryDto, UpdateNoteInput
+from schemas.note import CreateNoteInput, NoteDto, NoteSummaryDto, NoteView, UpdateNoteInput
 from utils.chunk_text import chunk_text
 
 logger = get_logger(__name__)
@@ -47,9 +47,27 @@ def _to_dto(doc: Note) -> NoteDto:
         content=doc.content,
         folderId=str(doc.folderId) if doc.folderId else None,
         tags=doc.tags,
+        pinned=doc.pinned,
+        archived=doc.archived,
+        linkedEntityType=doc.linkedEntityType,
+        linkedEntityId=doc.linkedEntityId,
+        linkedEntityLabel=doc.linkedEntityLabel,
         createdAt=doc.createdAt.isoformat(),
         updatedAt=doc.updatedAt.isoformat(),
     )
+
+
+_PREVIEW_LENGTH = 140
+
+
+def _preview(plain_text: str) -> str:
+    """Word-boundary-trimmed snippet for the notes list — same shape as the
+    search endpoint's own snippet, just a shorter cap for a list row."""
+    text = " ".join(plain_text.split())
+    if len(text) <= _PREVIEW_LENGTH:
+        return text
+    trimmed = text[:_PREVIEW_LENGTH].rsplit(" ", 1)[0]
+    return f"{trimmed}…"
 
 
 def _to_summary_dto(doc: Note) -> NoteSummaryDto:
@@ -57,8 +75,14 @@ def _to_summary_dto(doc: Note) -> NoteSummaryDto:
     return NoteSummaryDto(
         id=str(doc.id),
         title=doc.title,
+        preview=_preview(doc.plainText),
         folderId=str(doc.folderId) if doc.folderId else None,
         tags=doc.tags,
+        pinned=doc.pinned,
+        archived=doc.archived,
+        linkedEntityType=doc.linkedEntityType,
+        linkedEntityId=doc.linkedEntityId,
+        linkedEntityLabel=doc.linkedEntityLabel,
         updatedAt=doc.updatedAt.isoformat(),
     )
 
@@ -77,7 +101,16 @@ async def _embed_chunks(settings: Settings, plain_text: str, user_id: ObjectId, 
 
 async def create(settings: Settings, user_id: ObjectId, input_: CreateNoteInput) -> NoteDto:
     folder_id = ObjectId(input_.folderId) if input_.folderId else None
-    doc = await note_repository.create(user_id, input_.title, input_.content, folder_id, input_.tags)
+    doc = await note_repository.create(
+        user_id,
+        input_.title,
+        input_.content,
+        folder_id,
+        input_.tags,
+        linked_entity_type=input_.linkedEntityType,
+        linked_entity_id=input_.linkedEntityId,
+        linked_entity_label=input_.linkedEntityLabel,
+    )
     plain_text = extract_plain_text(input_.content)
     chunks = await _embed_chunks(settings, plain_text, user_id, None)
     assert doc.id is not None
@@ -85,9 +118,9 @@ async def create(settings: Settings, user_id: ObjectId, input_: CreateNoteInput)
     return _to_dto(updated or doc)
 
 
-async def list_for_user(user_id: ObjectId, folder_id: str | None, tag: str | None) -> list[NoteSummaryDto]:
+async def list_for_user(user_id: ObjectId, folder_id: str | None, tag: str | None, view: NoteView = "active") -> list[NoteSummaryDto]:
     fid = ObjectId(folder_id) if folder_id else None
-    docs = await note_repository.list_by_user(user_id, fid, tag)
+    docs = await note_repository.list_by_user(user_id, fid, tag, view)
     return [_to_summary_dto(d) for d in docs]
 
 
@@ -131,6 +164,15 @@ async def update(settings: Settings, note_id: ObjectId, user_id: ObjectId, input
     else:
         folder_id = ObjectId(input_.folderId) if input_.folderId else None
 
+    # linkedEntityType/Id/Label are always set together, so gate them as one
+    # unit off whichever field is present — leaving all three untouched, or
+    # replacing all three (a client sending one of the trio should send the
+    # others too; this mirrors folderId's own leave/clear/set pattern).
+    linked_fields_provided = provided.keys() & {"linkedEntityType", "linkedEntityId", "linkedEntityLabel"}
+    linked_entity_type = input_.linkedEntityType if linked_fields_provided else ...
+    linked_entity_id = input_.linkedEntityId if linked_fields_provided else ...
+    linked_entity_label = input_.linkedEntityLabel if linked_fields_provided else ...
+
     updated = await note_repository.update(
         note_id,
         user_id,
@@ -140,6 +182,11 @@ async def update(settings: Settings, note_id: ObjectId, user_id: ObjectId, input
         chunks=chunks,
         folder_id=folder_id,
         tags=input_.tags,
+        pinned=input_.pinned,
+        archived=input_.archived,
+        linked_entity_type=linked_entity_type,  # type: ignore[arg-type]
+        linked_entity_id=linked_entity_id,  # type: ignore[arg-type]
+        linked_entity_label=linked_entity_label,  # type: ignore[arg-type]
     )
     if not updated:
         raise NotFoundError("Note not found")
@@ -147,7 +194,22 @@ async def update(settings: Settings, note_id: ObjectId, user_id: ObjectId, input
 
 
 async def delete(note_id: ObjectId, user_id: ObjectId) -> None:
+    """Soft delete — moves the note to trash. See `permanent_delete` to
+    actually remove it."""
     deleted = await note_repository.delete(note_id, user_id)
+    if not deleted:
+        raise NotFoundError("Note not found")
+
+
+async def restore(note_id: ObjectId, user_id: ObjectId) -> NoteDto:
+    doc = await note_repository.restore(note_id, user_id)
+    if not doc:
+        raise NotFoundError("Note not found")
+    return _to_dto(doc)
+
+
+async def permanent_delete(note_id: ObjectId, user_id: ObjectId) -> None:
+    deleted = await note_repository.permanent_delete(note_id, user_id)
     if not deleted:
         raise NotFoundError("Note not found")
 

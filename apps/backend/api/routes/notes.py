@@ -37,6 +37,7 @@ from schemas.note import (
     NoteFolderDto,
     NoteSearchResultDto,
     NoteSummaryDto,
+    NoteView,
     RelatedNoteDto,
     ReviewFlashcardInput,
     SaveFlashcardsInput,
@@ -116,9 +117,9 @@ async def review_flashcard_route(card_id: str, body: ReviewFlashcardInput, mongo
 
 @router.get("/", response_model=list[NoteSummaryDto])
 async def list_notes_route(
-    mongo_user_id: MongoUserIdDep, folderId: str | None = None, tag: str | None = None
+    mongo_user_id: MongoUserIdDep, folderId: str | None = None, tag: str | None = None, view: NoteView = "active"
 ) -> list[NoteSummaryDto]:
-    return await note_service.list_for_user(mongo_user_id, folderId, tag)
+    return await note_service.list_for_user(mongo_user_id, folderId, tag, view)
 
 
 @router.post("/", response_model=NoteDto, status_code=201)
@@ -138,7 +139,20 @@ async def update_note_route(note_id: str, body: UpdateNoteInput, settings: Setti
 
 @router.delete("/{note_id}")
 async def delete_note_route(note_id: str, mongo_user_id: MongoUserIdDep) -> dict[str, bool]:
+    """Soft delete — moves the note to trash. See DELETE /{note_id}/permanent
+    for actually removing it."""
     await note_service.delete(ObjectId(note_id), mongo_user_id)
+    return {"deleted": True}
+
+
+@router.post("/{note_id}/restore", response_model=NoteDto)
+async def restore_note_route(note_id: str, mongo_user_id: MongoUserIdDep) -> NoteDto:
+    return await note_service.restore(ObjectId(note_id), mongo_user_id)
+
+
+@router.delete("/{note_id}/permanent")
+async def permanent_delete_note_route(note_id: str, mongo_user_id: MongoUserIdDep) -> dict[str, bool]:
+    await note_service.permanent_delete(ObjectId(note_id), mongo_user_id)
     return {"deleted": True}
 
 

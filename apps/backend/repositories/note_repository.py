@@ -3,16 +3,38 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, Literal
 
+from beanie.odm.enums import SortDirection
 from beanie.operators import In
 from bson import ObjectId
 
 from models.note import Note, NoteChunk
 
+NoteView = Literal["active", "archived", "trash"]
 
-async def create(user_id: ObjectId, title: str, content: dict[str, Any], folder_id: ObjectId | None, tags: list[str]) -> Note:
-    doc = Note(userId=user_id, title=title, content=content, plainText="", folderId=folder_id, tags=tags)
+
+async def create(
+    user_id: ObjectId,
+    title: str,
+    content: dict[str, Any],
+    folder_id: ObjectId | None,
+    tags: list[str],
+    linked_entity_type: str | None = None,
+    linked_entity_id: str | None = None,
+    linked_entity_label: str | None = None,
+) -> Note:
+    doc = Note(
+        userId=user_id,
+        title=title,
+        content=content,
+        plainText="",
+        folderId=folder_id,
+        tags=tags,
+        linkedEntityType=linked_entity_type,
+        linkedEntityId=linked_entity_id,
+        linkedEntityLabel=linked_entity_label,
+    )
     await doc.insert()
     return doc
 
@@ -32,13 +54,22 @@ async def distinct_tags(user_id: ObjectId) -> list[str]:
     return sorted(tags)
 
 
-async def list_by_user(user_id: ObjectId, folder_id: ObjectId | None, tag: str | None) -> list[Note]:
+async def list_by_user(user_id: ObjectId, folder_id: ObjectId | None, tag: str | None, view: NoteView = "active") -> list[Note]:
     query: dict[str, Any] = {"userId": user_id}
     if folder_id is not None:
         query["folderId"] = folder_id
     if tag:
         query["tags"] = tag
-    return await Note.find(query).sort("-updatedAt").to_list()
+    if view == "trash":
+        query["deletedAt"] = {"$ne": None}
+    else:
+        # Active and archived views both exclude the trash; "active" additionally
+        # excludes archived notes, "archived" is *only* archived notes. Use $ne
+        # rather than a strict False/True match so notes that predate the
+        # `archived` field (no key stored at all) still count as active.
+        query["deletedAt"] = None
+        query["archived"] = True if view == "archived" else {"$ne": True}
+    return await Note.find(query).sort([("pinned", SortDirection.DESCENDING), ("updatedAt", SortDirection.DESCENDING)]).to_list()
 
 
 async def update(
@@ -50,6 +81,11 @@ async def update(
     chunks: list[NoteChunk] | None,
     folder_id: ObjectId | None = ...,  # type: ignore[assignment]
     tags: list[str] | None = None,
+    pinned: bool | None = None,
+    archived: bool | None = None,
+    linked_entity_type: str | None = ...,  # type: ignore[assignment]
+    linked_entity_id: str | None = ...,  # type: ignore[assignment]
+    linked_entity_label: str | None = ...,  # type: ignore[assignment]
 ) -> Note | None:
     doc = await find_by_id(note_id, user_id)
     if not doc:
@@ -66,12 +102,42 @@ async def update(
         doc.folderId = folder_id  # type: ignore[assignment]
     if tags is not None:
         doc.tags = tags
+    if pinned is not None:
+        doc.pinned = pinned
+    if archived is not None:
+        doc.archived = archived
+    if linked_entity_type is not ...:
+        doc.linkedEntityType = linked_entity_type  # type: ignore[assignment]
+    if linked_entity_id is not ...:
+        doc.linkedEntityId = linked_entity_id  # type: ignore[assignment]
+    if linked_entity_label is not ...:
+        doc.linkedEntityLabel = linked_entity_label  # type: ignore[assignment]
     doc.updatedAt = datetime.now(UTC)
     await doc.save()
     return doc
 
 
 async def delete(note_id: ObjectId, user_id: ObjectId) -> bool:
+    """Soft delete — moves the note to trash rather than removing it. See
+    `permanent_delete` for the real, unrecoverable removal."""
+    doc = await find_by_id(note_id, user_id)
+    if not doc:
+        return False
+    doc.deletedAt = datetime.now(UTC)
+    await doc.save()
+    return True
+
+
+async def restore(note_id: ObjectId, user_id: ObjectId) -> Note | None:
+    doc = await find_by_id(note_id, user_id)
+    if not doc:
+        return None
+    doc.deletedAt = None
+    await doc.save()
+    return doc
+
+
+async def permanent_delete(note_id: ObjectId, user_id: ObjectId) -> bool:
     doc = await find_by_id(note_id, user_id)
     if not doc:
         return False

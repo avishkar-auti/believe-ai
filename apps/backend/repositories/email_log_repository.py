@@ -16,9 +16,18 @@ PRE_CLICK_STATUSES = [*PRE_OPEN_STATUSES, "OPENED"]
 
 
 async def insert_many(records: list[EmailLog]) -> list[EmailLog]:
+    """Beanie's bulk insert_many converts each document to a plain dict before
+    inserting (see its source) — it never writes the generated _id back onto
+    the original objects the way a single .insert() does. Without this, every
+    record here keeps `id=None` and the caller's later `str(log.id)` (used as
+    both the enqueued job's argument and its arq job id) becomes the literal
+    string "None" for every recipient, so no queued send can ever resolve
+    back to a real EmailLog."""
     if not records:
         return []
-    await EmailLog.insert_many(records)
+    result = await EmailLog.insert_many(records)
+    for record, inserted_id in zip(records, result.inserted_ids, strict=True):
+        record.id = PydanticObjectId(inserted_id)
     return records
 
 
