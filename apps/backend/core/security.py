@@ -21,7 +21,6 @@ from pymongo.errors import DuplicateKeyError
 
 from core.config import get_settings
 from core.db import get_database
-from core.errors import AuthorizationError
 from models.user import User
 from repositories import users_repository
 
@@ -124,14 +123,3 @@ async def optional_mongo_user_id(authorization: str | None = Header(default=None
     except HTTPException:
         return None
 
-
-async def require_recruiter(authorization: str | None = Header(default=None)) -> ObjectId:
-    """FastAPI dependency: mirrors apps/api's requireRecruiter.middleware.ts —
-    gates job-posting management routes to users whose own stored role is
-    recruiter or admin, checked against the database rather than trusting
-    anything from the request itself."""
-    mongo_user_id = await require_mongo_user_id(authorization)
-    user = await User.get(mongo_user_id)
-    if not user or user.role not in ("recruiter", "admin"):
-        raise AuthorizationError("Recruiter access required — enable it in Settings first")
-    return mongo_user_id

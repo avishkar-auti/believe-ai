@@ -13,7 +13,6 @@ from core.db import get_database
 from core.security import (
     optional_mongo_user_id,
     require_mongo_user_id,
-    require_recruiter,
     require_user_id,
     require_user_name,
 )
@@ -24,4 +23,3 @@ MongoUserIdDep = Annotated[ObjectId, Depends(require_mongo_user_id)]
 OptionalMongoUserIdDep = Annotated[ObjectId | None, Depends(optional_mongo_user_id)]
 UserNameDep = Annotated[str, Depends(require_user_name)]
 DbDep = Annotated[AsyncIOMotorDatabase, Depends(get_database)]
-RecruiterUserIdDep = Annotated[ObjectId, Depends(require_recruiter)]

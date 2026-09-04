@@ -4,6 +4,7 @@ export type ThemePreference = "light" | "dark" | "system";
 export type ResolvedTheme = "light" | "dark";
 
 const STORAGE_KEY = "believe-ai:theme";
+const LIQUID_STORAGE_KEY = "believe-ai:liquid";
 
 interface ThemeContextValue {
   /** What the user chose — may be "system". */
@@ -11,6 +12,10 @@ interface ThemeContextValue {
   /** What's actually applied right now. */
   resolved: ResolvedTheme;
   setPreference: (preference: ThemePreference) => void;
+  /** The pointer-following ambient highlight — on by default, off for anyone
+   * who'd rather not have a background effect track their cursor. */
+  liquid: boolean;
+  setLiquid: (liquid: boolean) => void;
 }
 
 const ThemeContext = createContext<ThemeContextValue | null>(null);
@@ -19,6 +24,12 @@ function readStoredPreference(): ThemePreference {
   if (typeof window === "undefined") return "system";
   const stored = window.localStorage.getItem(STORAGE_KEY);
   return stored === "light" || stored === "dark" || stored === "system" ? stored : "system";
+}
+
+function readStoredLiquid(): boolean {
+  if (typeof window === "undefined") return true;
+  const stored = window.localStorage.getItem(LIQUID_STORAGE_KEY);
+  return stored === null ? true : stored === "true";
 }
 
 function systemTheme(): ResolvedTheme {
@@ -40,6 +51,7 @@ function applyTheme(resolved: ResolvedTheme): void {
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
   const [preference, setPreferenceState] = useState<ThemePreference>(readStoredPreference);
+  const [liquid, setLiquidState] = useState<boolean>(readStoredLiquid);
   const [systemResolved, setSystemResolved] = useState<ResolvedTheme>(systemTheme);
 
   // Track OS-level changes so "system" stays live rather than only being
@@ -62,9 +74,14 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     window.localStorage.setItem(STORAGE_KEY, next);
   }, []);
 
+  const setLiquid = useCallback((next: boolean) => {
+    setLiquidState(next);
+    window.localStorage.setItem(LIQUID_STORAGE_KEY, String(next));
+  }, []);
+
   const value = useMemo(
-    () => ({ preference, resolved, setPreference }),
-    [preference, resolved, setPreference],
+    () => ({ preference, resolved, setPreference, liquid, setLiquid }),
+    [preference, resolved, setPreference, liquid, setLiquid],
   );
 
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;

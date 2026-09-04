@@ -1,14 +1,15 @@
 import type { HTMLAttributes } from "react";
 import { cn } from "../../lib/cn.js";
 
-type Tone = "neutral" | "success" | "warning" | "danger" | "info";
+type Tone = "neutral" | "success" | "warning" | "danger" | "info" | "accent";
 
 const TONE_CLASSES: Record<Tone, string> = {
-  neutral: "bg-ink-100 text-ink-600 ring-1 ring-inset ring-ink-900/[0.06] dark:bg-ink-700 dark:text-ink-200 dark:ring-white/[0.06]",
-  success: "bg-lime-500/15 text-lime-600 ring-1 ring-inset ring-lime-500/20 dark:text-lime-400",
-  warning: "bg-amber-500/15 text-amber-600 ring-1 ring-inset ring-amber-500/20 dark:text-amber-400",
-  danger: "bg-red-500/10 text-red-600 ring-1 ring-inset ring-red-500/20 dark:text-red-400",
-  info: "bg-brand-500/10 text-brand-600 ring-1 ring-inset ring-brand-500/20 dark:text-brand-300",
+  neutral: "bg-surface-2 text-fg-muted ring-1 ring-inset ring-fg/[0.06]",
+  success: "bg-positive/15 text-positive ring-1 ring-inset ring-positive/20",
+  warning: "bg-caution/15 text-caution ring-1 ring-inset ring-caution/20",
+  danger: "bg-critical/10 text-critical ring-1 ring-inset ring-critical/20",
+  info: "bg-informative/10 text-informative ring-1 ring-inset ring-informative/20",
+  accent: "bg-accent-soft text-accent ring-1 ring-inset ring-accent/20",
 };
 
 interface BadgeProps extends HTMLAttributes<HTMLSpanElement> {

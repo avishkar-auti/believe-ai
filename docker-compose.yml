@@ -17,6 +17,50 @@ services:
     volumes:
       - redis_data:/data
 
+  # Self-hosted Judge0 CE — real, isolated code execution for AI Practice
+  # Lab / Interview Prep's code sandbox, as a free alternative to Judge0-via-
+  # RapidAPI (see judge0.conf and services/code_sandbox_service.py). Own
+  # db/redis, isolated from the app's own believe-ai-mongodb/believe-ai-redis
+  # above — different engine (Postgres) and config needs, not shared state.
+  judge0-db:
+    image: postgres:16-alpine
+    container_name: believe-ai-judge0-db
+    restart: unless-stopped
+    env_file: judge0.conf
+    volumes:
+      - judge0_db_data:/var/lib/postgresql/data
+
+  judge0-redis:
+    image: redis:7-alpine
+    container_name: believe-ai-judge0-redis
+    restart: unless-stopped
+    command: ["sh", "-c", "redis-server --appendonly no --requirepass \"$$REDIS_PASSWORD\""]
+    env_file: judge0.conf
+
+  judge0-server:
+    image: judge0/judge0:1.13.1
+    container_name: believe-ai-judge0-server
+    restart: unless-stopped
+    ports:
+      - "2358:2358"
+    privileged: true
+    env_file: judge0.conf
+    depends_on:
+      - judge0-db
+      - judge0-redis
+
+  judge0-workers:
+    image: judge0/judge0:1.13.1
+    container_name: believe-ai-judge0-workers
+    restart: unless-stopped
+    command: ["./scripts/workers"]
+    privileged: true
+    env_file: judge0.conf
+    depends_on:
+      - judge0-db
+      - judge0-redis
+
 volumes:
   mongodb_data:
   redis_data:
+  judge0_db_data:

@@ -1,5 +1,4 @@
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
-import { AuthLayout } from "../layouts/AuthLayout.js";
 import { DashboardLayout } from "../layouts/DashboardLayout.js";
 import { ProtectedRoute } from "../layouts/ProtectedRoute.js";
 import { OnboardingGuard } from "../layouts/OnboardingGuard.js";
@@ -14,6 +13,9 @@ import { AiWriterPage } from "../../features/ai-writer/AiWriterPage.js";
 import { ResumePage } from "../../features/resumes/ResumePage.js";
 import { CareerFitPage } from "../../features/career-fit/CareerFitPage.js";
 import { RoadmapPage } from "../../features/roadmaps/RoadmapPage.js";
+import { PracticeOverviewPage } from "../../features/practice-lab/PracticeOverviewPage.js";
+import { PracticeChallengesPage } from "../../features/practice-lab/PracticeChallengesPage.js";
+import { PracticeWorkspacePage } from "../../features/practice-lab/PracticeWorkspacePage.js";
 import { InterviewPrepPage } from "../../features/interview-prep/InterviewPrepPage.js";
 import { JobBoardPage } from "../../features/jobs/JobBoardPage.js";
 import { CommunityPage } from "../../features/community/CommunityPage.js";
@@ -26,7 +28,6 @@ import { CampaignDetailPage } from "../../features/campaigns/CampaignDetailPage.
 import { IntegrationsPage } from "../../features/integrations/IntegrationsPage.js";
 import { SettingsLayout } from "../../features/settings/SettingsLayout.js";
 import { ProfileSettingsPage } from "../../features/settings/ProfileSettingsPage.js";
-import { PublicProfileSettingsPage } from "../../features/settings/PublicProfileSettingsPage.js";
 import { EmailTrackingPage } from "../../features/email-tracking/EmailTrackingPage.js";
 import { PricingPage } from "../../features/pricing/PricingPage.js";
 import { HowToUsePage } from "../../features/how-to-use/HowToUsePage.js";
@@ -34,6 +35,7 @@ import { JobIntelPage } from "../../features/job-outreach/JobIntelPage.js";
 import { NewsPage } from "../../features/news/NewsPage.js";
 import { PublicIdentityPage } from "../../features/public-identity/PublicIdentityPage.js";
 import { NotesPage } from "../../features/notes/NotesPage.js";
+import { ProfilePage } from "../../features/profile/ProfilePage.js";
 import { DesignStudioPage } from "../../features/design-studio/DesignStudioPage.js";
 import { DesignProjectsPage } from "../../features/design-studio/DesignProjectsPage.js";
 
@@ -44,10 +46,8 @@ export function AppRouter() {
         <Route path="/" element={<LandingPage />} />
         <Route path="/u/:username" element={<PublicIdentityPage />} />
 
-        <Route element={<AuthLayout />}>
-          <Route path="/login" element={<LoginPage />} />
-          <Route path="/signup" element={<SignupPage />} />
-        </Route>
+        <Route path="/login" element={<LoginPage />} />
+        <Route path="/signup" element={<SignupPage />} />
 
         <Route element={<ProtectedRoute />}>
           <Route element={<OnboardingGuard expectCompleted={false} />}>
@@ -55,22 +55,32 @@ export function AppRouter() {
           </Route>
 
           <Route element={<OnboardingGuard expectCompleted />}>
+            {/* Design Studio runs in its own full-screen shell — its pages use
+                a fixed inset-0 overlay and don't want the dashboard sidebar or
+                the AnimatePresence page-transition wrapper DashboardLayout
+                applies to its Outlet (the canvas's own exit transition never
+                finished inside it, so the URL would change but the old page
+                stayed mounted). */}
+            <Route path="/app/design-studio" element={<DesignProjectsPage />} />
+            <Route path="/app/design-studio/:projectId" element={<DesignStudioPage />} />
             <Route path="/app" element={<DashboardLayout />}>
               <Route index element={<DashboardPage />} />
+              <Route path="profile" element={<ProfilePage />} />
               <Route path="contacts" element={<ContactsPage />} />
               <Route path="templates" element={<TemplatesPage />} />
               <Route path="ai-writer" element={<AiWriterPage />} />
               <Route path="resume" element={<ResumePage />} />
               <Route path="career-fit" element={<CareerFitPage />} />
               <Route path="roadmaps" element={<RoadmapPage />} />
+              <Route path="practice" element={<PracticeOverviewPage />} />
+              <Route path="practice/challenges" element={<PracticeChallengesPage />} />
+              <Route path="practice/challenges/:slug" element={<PracticeWorkspacePage />} />
               <Route path="job-outreach" element={<JobIntelPage />} />
               <Route path="interview-prep" element={<InterviewPrepPage />} />
               <Route path="jobs" element={<JobBoardPage />} />
               <Route path="community" element={<CommunityPage />} />
               <Route path="news" element={<NewsPage />} />
               <Route path="notes" element={<NotesPage />} />
-              <Route path="design-studio" element={<DesignProjectsPage />} />
-              <Route path="design-studio/:projectId" element={<DesignStudioPage />} />
               <Route path="interview-room" element={<RoomListPage />} />
               <Route path="interview-room/:code" element={<RoomCallPage />} />
               <Route path="interview-room/:code/summary" element={<RoomSummaryPage />} />
@@ -83,7 +93,9 @@ export function AppRouter() {
               <Route path="settings" element={<SettingsLayout />}>
                 <Route index element={<Navigate to="profile" replace />} />
                 <Route path="profile" element={<ProfileSettingsPage />} />
-                <Route path="public-profile" element={<PublicProfileSettingsPage />} />
+                {/* Folded into /app/profile's Edit Profile drawer + sidebar — this
+                    route stays only so an old bookmark/link doesn't 404. */}
+                <Route path="public-profile" element={<Navigate to="/app/profile" replace />} />
               </Route>
               <Route path="pricing" element={<PricingPage />} />
               <Route path="how-to-use" element={<HowToUsePage />} />

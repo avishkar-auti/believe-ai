@@ -32,6 +32,7 @@ from api.routes import (
     insights,
     integrations,
     interview,
+    interview_sessions,
     job_board,
     job_intel,
     job_lead,
@@ -42,6 +43,16 @@ from api.routes import (
     notifications,
     outreach_draft,
     personalize,
+    practice_challenges,
+    practice_progress,
+    practice_submissions,
+    profile_achievements,
+    profile_certifications,
+    profile_education,
+    profile_experience,
+    profile_image,
+    profile_projects,
+    profile_skills,
     public_profile,
     resume,
     resumes,
@@ -193,6 +204,7 @@ app.include_router(campaigns.router)
 app.include_router(resumes.router)
 app.include_router(career.router)
 app.include_router(interview.router)
+app.include_router(interview_sessions.router)
 app.include_router(jobs.router)
 app.include_router(job_board.router)
 app.include_router(job_intel.router)
@@ -218,8 +230,18 @@ app.include_router(room_transcript.router)
 app.include_router(code_sandbox.router)
 app.include_router(auth.router)
 app.include_router(public_profile.router)
+app.include_router(profile_image.router)
+app.include_router(profile_experience.router)
+app.include_router(profile_education.router)
+app.include_router(profile_skills.router)
+app.include_router(profile_projects.router)
+app.include_router(profile_certifications.router)
+app.include_router(profile_achievements.router)
 app.include_router(feedback.router)
 app.include_router(analytics.router)
 app.include_router(career_fit.router)
 app.include_router(roadmap.router)
 app.include_router(resume.router)
+app.include_router(practice_challenges.router)
+app.include_router(practice_submissions.router)
+app.include_router(practice_progress.router)

@@ -9,17 +9,19 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   size?: Size;
 }
 
-/** Fully-rounded pills. Primary carries the brand gradient + a tinted glow so the main CTA reads as the one colorful thing on an otherwise neutral page. */
+/** Moderate radius, not a pill — and hover states move by shadow/color, not
+ * scale. A button that grows on hover and shrinks on every click is the
+ * single most common "AI wrote this" animation tell; real products signal
+ * hover with a shade/elevation shift and reserve motion for the press itself. */
 const VARIANT_CLASSES: Record<Variant, string> = {
   primary:
-    "bg-gradient-to-b from-brand-500 to-brand-600 text-white shadow-[0_1px_1px_rgba(255,255,255,0.15)_inset,0_4px_12px_-2px_rgba(67,83,255,0.45)] hover:from-brand-400 hover:to-brand-500 hover:shadow-[0_1px_1px_rgba(255,255,255,0.15)_inset,0_6px_18px_-2px_rgba(67,83,255,0.55)] disabled:from-ink-300 disabled:to-ink-300 disabled:shadow-none dark:disabled:from-ink-700 dark:disabled:to-ink-700",
-  secondary:
-    "bg-white text-ink-800 border border-ink-200 hover:border-ink-300 hover:bg-ink-50 hover:shadow-sm dark:bg-transparent dark:text-ink-100 dark:border-ink-600 dark:hover:bg-ink-800",
+    "bg-accent text-accent-fg shadow-[inset_0_1px_0_rgb(255_255_255/0.16),0_1px_2px_rgb(var(--accent)/0.3)] hover:bg-accent-hover hover:shadow-[inset_0_1px_0_rgb(255_255_255/0.16),0_4px_14px_-2px_rgb(var(--accent)/0.5)]",
+  secondary: "bg-surface text-fg border border-line hover:border-line-strong hover:bg-surface-2",
   accent:
-    "bg-gradient-to-b from-lime-400 to-lime-500 text-ink-900 shadow-[0_4px_12px_-2px_rgba(139,195,74,0.4)] hover:from-lime-400/90 hover:to-lime-500/90 disabled:from-ink-300 disabled:to-ink-300 disabled:shadow-none",
-  ghost: "text-ink-600 hover:bg-ink-100 dark:text-ink-300 dark:hover:bg-ink-800",
+    "bg-positive text-white shadow-[0_1px_2px_rgb(var(--positive)/0.3)] hover:bg-positive/90 hover:shadow-[0_4px_14px_-2px_rgb(var(--positive)/0.45)]",
+  ghost: "text-fg-muted hover:bg-fg/[0.06] hover:text-fg",
   danger:
-    "bg-gradient-to-b from-red-500 to-red-600 text-white shadow-[0_4px_12px_-2px_rgba(220,38,38,0.4)] hover:from-red-400 hover:to-red-500 disabled:from-red-300 disabled:to-red-300 disabled:shadow-none",
+    "bg-critical text-white shadow-[0_1px_2px_rgb(var(--critical)/0.3)] hover:bg-critical/90 hover:shadow-[0_4px_14px_-2px_rgb(var(--critical)/0.45)]",
 };
 
 const SIZE_CLASSES: Record<Size, string> = {
@@ -36,7 +38,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
     <button
       ref={ref}
       className={cn(
-        "inline-flex items-center justify-center gap-2 rounded-pill font-medium transition-all duration-150 hover:scale-[1.02] active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:scale-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-500",
+        "inline-flex items-center justify-center gap-2 rounded-control font-medium transition-[background-color,border-color,box-shadow,color,transform] duration-150 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60 disabled:active:scale-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent",
         VARIANT_CLASSES[variant],
         SIZE_CLASSES[size],
         className,

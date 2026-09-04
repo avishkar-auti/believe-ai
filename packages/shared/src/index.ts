@@ -25,6 +25,8 @@ export * from "./types/roomTranscript.js";
 export * from "./types/feedback.js";
 export * from "./types/note.js";
 export * from "./types/design.js";
+export * from "./types/profileSections.js";
+export * from "./types/practice.js";
 export * from "./constants/errors.js";
 export * from "./constants/queues.js";
 export * from "./constants/plans.js";

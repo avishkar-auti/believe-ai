@@ -11,9 +11,7 @@ export function Card({ className, tone = "raised", ...props }: CardProps) {
     <div
       className={cn(
         "rounded-card",
-        tone === "raised"
-          ? "border border-ink-200/70 bg-white shadow-card ring-1 ring-inset ring-white/60 dark:border-ink-700 dark:bg-ink-800 dark:ring-white/[0.03]"
-          : "bg-ink-100/70 dark:bg-ink-800/60",
+        tone === "raised" ? "border border-line bg-surface shadow-card ring-1 ring-inset ring-fg/[0.03]" : "bg-surface-2",
         className,
       )}
       {...props}
@@ -22,7 +20,7 @@ export function Card({ className, tone = "raised", ...props }: CardProps) {
 }
 
 export function CardHeader({ className, ...props }: HTMLAttributes<HTMLDivElement>) {
-  return <div className={cn("border-b border-ink-100 px-6 py-4 dark:border-ink-700", className)} {...props} />;
+  return <div className={cn("border-b border-line px-6 py-4", className)} {...props} />;
 }
 
 export function CardBody({ className, ...props }: HTMLAttributes<HTMLDivElement>) {

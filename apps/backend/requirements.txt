@@ -12,6 +12,7 @@ langgraph-checkpoint-sqlite==3.1.1
 beanie==2.2.0
 cryptography==50.0.0
 arq==0.28.0
+redis==5.3.1
 python-multipart==0.0.20
 email-validator==2.2.0
 nh3==0.2.20
