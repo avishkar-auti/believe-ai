@@ -1,8 +1,13 @@
-import type { DraftStatus, OutreachDraft, OutreachDraftEditedText } from "@believe-ai/shared";
+import type { DraftStatus, OutreachDraft, OutreachDraftEditedText, OutreachDraftIntent } from "@believe-ai/shared";
 import { apiClient } from "../../lib/apiClient.js";
 
-export async function generateOutreachDrafts(jobIntelId: string, contactIds: string[]) {
-  const res = await apiClient.post<OutreachDraft[]>("/outreach-drafts/", { jobIntelId, contactIds });
+export async function generateOutreachDrafts(
+  jobIntelId: string,
+  contactIds: string[],
+  resumeId?: string,
+  intent: OutreachDraftIntent = "outreach",
+) {
+  const res = await apiClient.post<OutreachDraft[]>("/outreach-drafts/", { jobIntelId, contactIds, resumeId, intent });
   return res.data;
 }
 

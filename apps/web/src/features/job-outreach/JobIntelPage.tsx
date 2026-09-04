@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useLocation } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Briefcase, Building2, ExternalLink, MapPin, Trash2, Users } from "lucide-react";
 import type { CompanyIntel, ConfidenceLevel } from "@believe-ai/shared";
@@ -14,7 +15,16 @@ import { JobLeadPanel } from "./JobLeadPanel.js";
 
 export function JobIntelPage() {
   const queryClient = useQueryClient();
+  const location = useLocation();
   const [jobUrl, setJobUrl] = useState("");
+
+  // Seeded once from a Job Board "Job Intelligence" deep-link (see features/jobs/CareerActions.tsx)
+  // — still requires the user to click Analyze, never auto-submits.
+  useEffect(() => {
+    const state = location.state as { jobUrl?: string } | null;
+    if (state?.jobUrl) setJobUrl(state.jobUrl);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- seed once from arrival state, not on every navigation
+  }, []);
 
   const { data, isLoading } = useQuery({ queryKey: ["jobIntel"], queryFn: fetchJobIntelList });
 
@@ -125,7 +135,7 @@ export function JobIntelPage() {
 
                 <CompanyIntelPanel intel={job.companyIntel} />
 
-                <JobLeadPanel jobIntelId={job.id} />
+                <JobLeadPanel jobIntelId={job.id} company={job.company} />
 
                 <OutreachDraftPanel jobIntelId={job.id} />
               </CardBody>
