@@ -103,7 +103,7 @@ from schemas.ai import (
 from utils.parse_json import parse_and_validate_json
 
 
-class GeminiProvider:
+class GoogleGenAIProvider:
     id = "gemini"
 
     def __init__(self, api_key: str, model: str, embedding_model: str, timeout_seconds: float) -> None:

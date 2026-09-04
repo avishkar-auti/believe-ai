@@ -13,7 +13,7 @@ from core.config import Settings
 from core.logging import get_logger
 from providers.base import AiProvider
 from providers.errors import AiProviderError
-from providers.gemini import GeminiProvider
+from providers.google_genai import GoogleGenAIProvider
 from providers.ollama import OllamaProvider
 from providers.openai_compatible import OpenAiCompatibleProvider
 
@@ -25,7 +25,7 @@ def build_available_providers(settings: Settings) -> dict[str, AiProvider]:
     providers: dict[str, AiProvider] = {}
 
     if settings.gemini_api_key:
-        providers["gemini"] = GeminiProvider(
+        providers["gemini"] = GoogleGenAIProvider(
             settings.gemini_api_key,
             settings.gemini_model,
             settings.gemini_embedding_model,
