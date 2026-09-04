@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import datetime
 from typing import Any
 
 from bson import ObjectId
@@ -114,32 +114,3 @@ async def raw_locations_matching(country: str | None, state: str | None, city: s
 
 async def find_by_id(job_id: ObjectId) -> Job | None:
     return await Job.get(job_id)
-
-
-async def list_by_poster(user_id: ObjectId) -> list[Job]:
-    return await Job.find(Job.postedBy == user_id).sort("-createdAt").to_list()
-
-
-async def create(posted_by: ObjectId, data: dict[str, Any]) -> Job:
-    doc = Job(postedBy=posted_by, **data)
-    await doc.insert()
-    return doc
-
-
-async def update(job_id: ObjectId, posted_by: ObjectId, updates: dict[str, Any]) -> Job | None:
-    doc = await Job.find_one(Job.id == job_id, Job.postedBy == posted_by)
-    if not doc:
-        return None
-    for key, value in updates.items():
-        setattr(doc, key, value)
-    doc.updatedAt = datetime.now(UTC)
-    await doc.save()
-    return doc
-
-
-async def delete(job_id: ObjectId, posted_by: ObjectId) -> bool:
-    doc = await Job.find_one(Job.id == job_id, Job.postedBy == posted_by)
-    if not doc:
-        return False
-    await doc.delete()
-    return True

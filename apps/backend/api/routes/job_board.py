@@ -1,30 +1,29 @@
 """Mirrors apps/api's job.routes.ts route shapes exactly. Named job_board
 (not jobs) to avoid colliding with api/routes/jobs.py, which is the
 existing /ai/jobs AI-drafting router — this one is the actual /jobs REST
-resource. Browsing the board is open to every signed-in user; only
-posting/managing needs recruiter mode (RecruiterUserIdDep)."""
+resource. Browsing, saving, and matching are open to every signed-in user —
+there is no recruiter-only posting/management on this router."""
 
 from __future__ import annotations
-
-from typing import Literal
 
 from beanie import PydanticObjectId
 from fastapi import APIRouter
 
-from api.dependencies import MongoUserIdDep, RecruiterUserIdDep, SettingsDep, UserIdDep
+from api.dependencies import DbDep, MongoUserIdDep, SettingsDep, UserIdDep
+from core.errors import ValidationError
 from models.job import EmploymentType, ExperienceLevel, WorkMode
 from schemas.job import (
-    CreateJobInput,
     DatePostedFilter,
     JobDto,
     JobFilterOptions,
+    JobMatchInput,
+    JobMatchResult,
     JobSource,
     ToggleSaveInput,
     ToggleSaveResult,
-    UpdateJobInput,
 )
 from schemas.pagination import DEFAULT_PAGE_SIZE, PaginatedResult
-from services import audit_service, job_service
+from services import job_match_service, job_service
 from services.job_service import JobSearchFilters
 
 router = APIRouter(prefix="/jobs", tags=["jobs"])
@@ -74,38 +73,36 @@ async def job_filters_route(_user_id: UserIdDep) -> JobFilterOptions:
     return await job_service.get_filter_options()
 
 
-@router.get("/mine", response_model=list[JobDto])
-async def list_my_jobs_route(recruiter_user_id: RecruiterUserIdDep) -> list[JobDto]:
-    return await job_service.list_mine(recruiter_user_id)
-
-
 @router.post("/{job_id}/save", response_model=ToggleSaveResult)
 async def toggle_save_job_route(job_id: str, body: ToggleSaveInput, mongo_user_id: MongoUserIdDep, _user_id: UserIdDep) -> ToggleSaveResult:
     saved = await job_service.toggle_save(mongo_user_id, job_id, body.job)
     return ToggleSaveResult(saved=saved)
 
 
+@router.post("/match", response_model=JobMatchResult | None)
+async def score_job_match_route(
+    body: JobMatchInput, db: DbDep, mongo_user_id: MongoUserIdDep, _user_id: UserIdDep
+) -> JobMatchResult | None:
+    """For external (jsearch) listings, which the backend can't fetch by id —
+    the frontend already holds the full job from its search results and
+    supplies it here, same pattern as ToggleSaveInput."""
+    if not body.job:
+        raise ValidationError("Job details are required to score a match for this listing.")
+    return await job_match_service.score_job_match_for_user(db, mongo_user_id, body.job, body.resumeId)
+
+
+@router.get("/{job_id}/match", response_model=JobMatchResult | None)
+async def get_job_match_route(
+    job_id: PydanticObjectId,
+    db: DbDep,
+    mongo_user_id: MongoUserIdDep,
+    _user_id: UserIdDep,
+    resumeId: PydanticObjectId | None = None,
+) -> JobMatchResult | None:
+    job = await job_service.get_by_id(job_id)
+    return await job_match_service.score_job_match_for_user(db, mongo_user_id, job, resumeId)
+
+
 @router.get("/{job_id}", response_model=JobDto)
 async def get_job_route(job_id: PydanticObjectId, _user_id: UserIdDep) -> JobDto:
     return await job_service.get_by_id(job_id)
-
-
-@router.post("/", response_model=JobDto, status_code=201)
-async def create_job_route(body: CreateJobInput, recruiter_user_id: RecruiterUserIdDep) -> JobDto:
-    job = await job_service.create(recruiter_user_id, body)
-    await audit_service.record(recruiter_user_id, "job.created", "job", entity_id=job.id)
-    return job
-
-
-@router.patch("/{job_id}", response_model=JobDto)
-async def update_job_route(job_id: PydanticObjectId, body: UpdateJobInput, recruiter_user_id: RecruiterUserIdDep) -> JobDto:
-    job = await job_service.update(job_id, recruiter_user_id, body)
-    await audit_service.record(recruiter_user_id, "job.updated", "job", entity_id=job.id)
-    return job
-
-
-@router.delete("/{job_id}")
-async def delete_job_route(job_id: PydanticObjectId, recruiter_user_id: RecruiterUserIdDep) -> dict[str, Literal[True]]:
-    await job_service.delete(job_id, recruiter_user_id)
-    await audit_service.record(recruiter_user_id, "job.deleted", "job", entity_id=str(job_id))
-    return {"deleted": True}

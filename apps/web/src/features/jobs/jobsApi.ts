@@ -1,4 +1,4 @@
-import type { CreateJobInput, Job, JobFilterOptions, JobSearchFilters, PaginatedResult, UpdateJobInput } from "@believe-ai/shared";
+import type { Job, JobFilterOptions, JobMatch, JobSearchFilters, PaginatedResult } from "@believe-ai/shared";
 import { apiClient } from "../../lib/apiClient.js";
 
 export async function searchJobs(filters: JobSearchFilters, page = 1) {
@@ -20,40 +20,14 @@ export async function toggleSaveJob(job: Job) {
   return res.data;
 }
 
-export async function fetchMyJobs() {
-  const res = await apiClient.get<Job[]>("/jobs/mine");
+// Internal jobs can be re-fetched by id server-side; external (jsearch) ones
+// only exist as the live payload the caller already holds from search results.
+export async function fetchJobMatch(jobId: string, resumeId: string | undefined) {
+  const res = await apiClient.get<JobMatch | null>(`/jobs/${jobId}/match`, { params: { resumeId } });
   return res.data;
 }
 
-export async function createJob(input: CreateJobInput) {
-  const res = await apiClient.post<Job>("/jobs/", input);
-  return res.data;
-}
-
-export async function updateJob(id: string, input: UpdateJobInput) {
-  const res = await apiClient.patch<Job>(`/jobs/${id}`, input);
-  return res.data;
-}
-
-export async function deleteJob(id: string) {
-  await apiClient.delete(`/jobs/${id}`);
-}
-
-export interface JobPostDraft {
-  title: string;
-  description: string;
-  skills: string[];
-  employmentType: "full_time" | "part_time" | "contract" | "internship";
-}
-
-// Drafting is a fresh, stateless generation (no stored data involved), so the
-// web app calls the Python AI service directly, same as AI Writer.
-export async function draftJobPost(roleTitle: string, company: string, briefDescription: string, seniority?: string) {
-  const res = await apiClient.post<JobPostDraft>("/ai/jobs/draft", {
-    roleTitle,
-    company,
-    briefDescription,
-    seniority,
-  });
+export async function fetchJobMatchForJob(job: Job, resumeId: string | undefined) {
+  const res = await apiClient.post<JobMatch | null>("/jobs/match", { job, resumeId });
   return res.data;
 }

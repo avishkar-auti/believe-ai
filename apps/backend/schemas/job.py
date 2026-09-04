@@ -5,7 +5,8 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import BaseModel, Field, model_validator
+from beanie import PydanticObjectId
+from pydantic import BaseModel
 
 from models.job import EmploymentType, ExperienceLevel, JobSource, WorkMode
 
@@ -46,45 +47,29 @@ class JobFilterOptions(BaseModel):
     skills: list[str]
 
 
-class CreateJobInput(BaseModel):
-    title: str = Field(min_length=1)
-    company: str = Field(min_length=1)
-    location: str | None = None
-    description: str = Field(min_length=1)
-    skills: list[str] = Field(default_factory=list)
-    employmentType: EmploymentType | None = None
-    workMode: WorkMode | None = None
-    experienceLevel: ExperienceLevel | None = None
-    salaryMin: float | None = Field(default=None, ge=0)
-    salaryMax: float | None = Field(default=None, ge=0)
-    recruiterLinkedIn: str | None = None
-    applyUrl: str | None = None
-
-    @model_validator(mode="after")
-    def _check_salary_range(self) -> CreateJobInput:
-        if self.salaryMin is not None and self.salaryMax is not None and self.salaryMax < self.salaryMin:
-            raise ValueError("Maximum salary must be at or above the minimum.")
-        return self
-
-
-class UpdateJobInput(BaseModel):
-    title: str | None = Field(default=None, min_length=1)
-    company: str | None = Field(default=None, min_length=1)
-    location: str | None = None
-    description: str | None = Field(default=None, min_length=1)
-    skills: list[str] | None = None
-    employmentType: EmploymentType | None = None
-    workMode: WorkMode | None = None
-    experienceLevel: ExperienceLevel | None = None
-    salaryMin: float | None = Field(default=None, ge=0)
-    salaryMax: float | None = Field(default=None, ge=0)
-    recruiterLinkedIn: str | None = None
-    applyUrl: str | None = None
-
-
 class ToggleSaveInput(BaseModel):
     job: JobDto | None = None
 
 
 class ToggleSaveResult(BaseModel):
     saved: bool
+
+
+class JobMatchResult(BaseModel):
+    """Deterministic, not AI-generated — see services/job_match_service.py.
+    matchPercent is the real share of this job's listed skills found in the
+    resume's text, never an invented similarity score."""
+
+    matchPercent: int
+    label: Literal["strong", "good", "partial"]
+    matchedSkills: list[str]
+    gapSkills: list[str]
+
+
+class JobMatchInput(BaseModel):
+    """Mirrors ToggleSaveInput's shape: internal jobs can be re-fetched
+    server-side by id, but an external (jsearch) listing only exists as the
+    live payload the frontend already holds, so the caller supplies it."""
+
+    job: JobDto | None = None
+    resumeId: PydanticObjectId | None = None

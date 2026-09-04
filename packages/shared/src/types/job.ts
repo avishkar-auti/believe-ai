@@ -1,7 +1,7 @@
 /**
- * Canonical Job type. Only "internal" (recruiter-posted) jobs are ever
- * persisted — "jsearch" entries are fetched live from the external API and
- * merged into the list response, never written to our own database.
+ * Canonical Job type. Only "internal" jobs are ever persisted — "jsearch"
+ * entries are fetched live from the external API and merged into the list
+ * response, never written to our own database.
  */
 export type JobSource = "internal" | "jsearch";
 export type EmploymentType = "full_time" | "part_time" | "contract" | "internship";
@@ -19,27 +19,12 @@ export const DATE_POSTED_OPTIONS: { value: DatePostedFilter; label: string }[] =
   { value: "30d", label: "Past month" },
 ];
 
-export interface CreateJobInput {
-  title: string;
-  company: string;
-  location?: string | null;
-  description: string;
-  skills?: string[];
-  employmentType?: EmploymentType | null;
-  workMode?: WorkMode | null;
-  experienceLevel?: ExperienceLevel | null;
-  salaryMin?: number | null;
-  salaryMax?: number | null;
-  recruiterLinkedIn?: string | null;
-  applyUrl?: string | null;
-}
-
-export type UpdateJobInput = Partial<CreateJobInput>;
-
 export interface Job {
   id: string;
   source: JobSource;
-  /** Null for external (jsearch) listings — only internal postings have an owner. */
+  /** Null for external (jsearch) listings. Internal jobs retain a postedBy
+   * owner id from before recruiter self-service posting was removed from
+   * the Job Board UI — no longer settable through the app. */
   postedBy: string | null;
   title: string;
   company: string;
@@ -74,6 +59,24 @@ export interface JobFilterOptions {
   locationOptions: LocationOption[];
   companies: string[];
   skills: string[];
+}
+
+/**
+ * Deterministic, not AI-generated (see apps/backend/services/job_match_service.py):
+ * matchPercent is the real share of the job's listed skills found in the resume text,
+ * never an invented similarity score. `null` means the job listed no skills to compare —
+ * a different claim from "0% match" — callers should show an "Analyze fit" CTA instead.
+ */
+export interface JobMatch {
+  matchPercent: number;
+  label: "strong" | "good" | "partial";
+  matchedSkills: string[];
+  gapSkills: string[];
+}
+
+export interface JobMatchInput {
+  job?: Job;
+  resumeId?: string;
 }
 
 export interface JobSearchFilters {
