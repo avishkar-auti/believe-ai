@@ -8,6 +8,37 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+# Country values are inconsistent across sources — JSearch returns ISO
+# alpha-2 codes ("IN"), manually posted/internal jobs tend to use the full
+# name ("India") — so both must be recognized as the same country, both when
+# matching internal listings and when picking JSearch's own `country` query
+# param. Mirrors the frontend's INDIA_ALIASES (JobFilters.tsx).
+_COUNTRY_ALIASES: dict[str, str] = {
+    "india": "in",
+    "united states": "us",
+    "united states of america": "us",
+    "usa": "us",
+    "united kingdom": "gb",
+    "uk": "gb",
+    "canada": "ca",
+    "australia": "au",
+    "germany": "de",
+    "singapore": "sg",
+    "united arab emirates": "ae",
+    "uae": "ae",
+}
+
+
+def normalize_country(country: str | None) -> str | None:
+    """Folds a free-text or ISO-code country value down to a lowercase ISO
+    alpha-2 code, so "India" and "IN" compare equal."""
+    if not country:
+        return None
+    normalized = country.strip().lower()
+    if len(normalized) == 2:
+        return normalized
+    return _COUNTRY_ALIASES.get(normalized, normalized)
+
 
 @dataclass(frozen=True)
 class ParsedLocation:
@@ -31,10 +62,10 @@ def parse_location(raw: str | None) -> ParsedLocation:
 
 
 def matches(parsed: ParsedLocation, country: str | None, state: str | None, city: str | None) -> bool:
-    if country and parsed.country != country:
+    if country and normalize_country(parsed.country) != normalize_country(country):
         return False
-    if state and parsed.state != state:
+    if state and (parsed.state or "").strip().lower() != state.strip().lower():
         return False
-    if city and parsed.city != city:
+    if city and (parsed.city or "").strip().lower() != city.strip().lower():
         return False
     return True

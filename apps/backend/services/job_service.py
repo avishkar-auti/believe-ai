@@ -5,7 +5,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
-from typing import Any
 
 from bson import ObjectId
 
@@ -16,10 +15,10 @@ from models.job import Job
 from models.saved_job import JobSnapshot, SavedJob
 from repositories import job_repository, saved_job_repository
 from repositories.job_repository import JobSearchFilters as RepoJobSearchFilters
-from schemas.job import CreateJobInput, DatePostedFilter, JobDto, JobFilterOptions, LocationOption, UpdateJobInput
+from schemas.job import DatePostedFilter, JobDto, JobFilterOptions, LocationOption
 from schemas.pagination import PaginatedResult, safe_limit, safe_page, total_pages
 from services.location_parsing import matches as location_matches
-from services.location_parsing import parse_location
+from services.location_parsing import normalize_country, parse_location
 
 _DATE_POSTED_DELTA = {
     "24h": timedelta(hours=24),
@@ -170,7 +169,11 @@ async def search(settings: Settings, filters: JobSearchFilters, page: int, limit
             safe_page_,
             safe_limit_,
         ),
-        (await search_external_jobs(settings, filters.q, filters.datePosted) if include_external and filters.q else []),
+        (
+            await search_external_jobs(settings, filters.q, filters.datePosted, normalize_country(filters.country))
+            if include_external and filters.q
+            else []
+        ),
         await saved_job_repository.saved_job_ids(user_id),
     )
 
@@ -220,27 +223,3 @@ async def get_by_id(job_id: ObjectId) -> JobDto:
     if not doc:
         raise NotFoundError("Job not found")
     return _to_dto(doc)
-
-
-async def list_mine(user_id: ObjectId) -> list[JobDto]:
-    docs = await job_repository.list_by_poster(user_id)
-    return [_to_dto(doc) for doc in docs]
-
-
-async def create(user_id: ObjectId, input_: CreateJobInput) -> JobDto:
-    doc = await job_repository.create(user_id, input_.model_dump())
-    return _to_dto(doc)
-
-
-async def update(job_id: ObjectId, user_id: ObjectId, input_: UpdateJobInput) -> JobDto:
-    updates: dict[str, Any] = input_.model_dump(exclude_unset=True)
-    doc = await job_repository.update(job_id, user_id, updates)
-    if not doc:
-        raise NotFoundError("Job not found")
-    return _to_dto(doc)
-
-
-async def delete(job_id: ObjectId, user_id: ObjectId) -> None:
-    deleted = await job_repository.delete(job_id, user_id)
-    if not deleted:
-        raise NotFoundError("Job not found")

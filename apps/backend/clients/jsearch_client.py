@@ -57,17 +57,23 @@ def _to_job_dto(j: dict[str, Any]) -> JobDto:
     )
 
 
-async def search_external_jobs(settings: Settings, query: str, date_posted: DatePostedFilter | None = None) -> list[JobDto]:
+async def search_external_jobs(
+    settings: Settings, query: str, date_posted: DatePostedFilter | None = None, country: str | None = None
+) -> list[JobDto]:
     if not settings.rapidapi_jsearch_key or not query:
         return []
 
     date_param = _DATE_POSTED_MAP.get(date_posted, "all") if date_posted and date_posted != "any" else "all"
+    # JSearch defaults to "us" if the param is omitted, which silently hid every
+    # non-US result (India included) regardless of what the user searched for or
+    # filtered by — this now reflects the user's own country filter instead.
+    country_param = country or "us"
 
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
             res = await client.get(
                 "https://jsearch.p.rapidapi.com/search-v2",
-                params={"query": query, "num_pages": "1", "country": "us", "date_posted": date_param},
+                params={"query": query, "num_pages": "1", "country": country_param, "date_posted": date_param},
                 headers={
                     "X-RapidAPI-Key": settings.rapidapi_jsearch_key,
                     "X-RapidAPI-Host": "jsearch.p.rapidapi.com",
