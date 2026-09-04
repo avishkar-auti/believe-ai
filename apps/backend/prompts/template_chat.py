@@ -20,8 +20,11 @@ def build_template_chat_prompt(req: TemplateChatRequest) -> str:
         "subject and body: the FULL updated template after applying this turn's request — always return the "
         "complete draft, never a diff or partial snippet.",
         "Preserve placeholder tokens like {{firstName}}, {{lastName}}, {{company}}, {{jobTitle}}, {{senderName}}, "
-        "{{senderCompany}} wherever they make sense for a reusable template — use them instead of a specific "
-        "name/company whenever the user hasn't given you a real one.",
+        "{{senderCompany}}, {{linkedin}}, {{github}} wherever they make sense for a reusable template — use them "
+        "instead of a specific name/company/link whenever the user hasn't given you a real one. {{linkedin}} and "
+        "{{github}} each render as a ready clickable link (not a bare URL), so a natural sign-off is "
+        "\"Best regards,\\n{{senderName}}\\n{{linkedin}} | {{github}}\" — offer that shape when the user asks for "
+        "a sign-off, closing, or signature and hasn't specified their own.",
     ]
     if has_draft:
         lines.append(

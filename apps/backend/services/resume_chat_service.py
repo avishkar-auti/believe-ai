@@ -35,9 +35,9 @@ TOP_K_CHUNKS = 5
 async def chat_about_resume_for_user(
     settings: Settings, db: AsyncIOMotorDatabase, user_id: ObjectId, req: ResumeChatRequest
 ) -> ResumeChatResult:
-    resume = await resumes_repository.find_by_user_id(db, user_id)
+    resume = await resumes_repository.resolve_for_user(db, user_id, req.resumeId)
     if not resume:
-        raise NotFoundError("No resume uploaded yet")
+        raise NotFoundError("No resume uploaded yet" if not req.resumeId else "Resume not found")
 
     chunks = resume.get("chunks") or []
     embedded_chunks = [c for c in chunks if c.get("vector")]

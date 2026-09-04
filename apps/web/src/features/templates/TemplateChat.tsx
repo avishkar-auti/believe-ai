@@ -58,13 +58,13 @@ export function TemplateChat({ onClose }: TemplateChatProps) {
   }
 
   return (
-    <Card className="overflow-hidden rounded-panel border-brand-100 dark:border-ink-700">
+    <Card className="overflow-hidden rounded-panel">
       <CardBody className="grid grid-cols-1 gap-5 lg:grid-cols-2">
         {/* Chat column */}
         <div className="flex flex-col gap-3">
           <div className="flex items-center justify-between">
-            <p className="flex items-center gap-1.5 text-sm font-semibold text-ink-900 dark:text-white">
-              <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-brand-500/10 text-brand-600 dark:bg-brand-500/20 dark:text-brand-300">
+            <p className="flex items-center gap-1.5 text-sm font-semibold text-fg">
+              <span className="flex h-6 w-6 items-center justify-center rounded-control bg-accent-soft text-accent">
                 <Sparkles className="h-3.5 w-3.5" />
               </span>
               Draft a template with AI
@@ -74,12 +74,10 @@ export function TemplateChat({ onClose }: TemplateChatProps) {
             </Button>
           </div>
 
-          <div className="flex max-h-80 min-h-[10rem] flex-col gap-2.5 overflow-y-auto rounded-xl border border-ink-100 bg-ink-50 p-3 dark:border-ink-700 dark:bg-ink-800/60">
+          <div className="flex max-h-80 min-h-[10rem] flex-col gap-2.5 overflow-y-auto rounded-control border border-line bg-surface-2 p-3">
             {messages.length === 0 ? (
               <div className="space-y-2.5 py-1">
-                <p className="text-sm text-ink-500 dark:text-ink-400">
-                  Tell it what kind of template you need, or start from a suggestion:
-                </p>
+                <p className="text-sm text-fg-muted">Tell it what kind of template you need, or start from a suggestion:</p>
                 <div className="flex flex-col gap-1.5">
                   {SUGGESTED_PROMPTS.map((p) => (
                     <button
@@ -87,7 +85,7 @@ export function TemplateChat({ onClose }: TemplateChatProps) {
                       type="button"
                       onClick={() => handleSend(p)}
                       disabled={chatMutation.isPending}
-                      className="rounded-lg border border-ink-200 bg-white px-2.5 py-2 text-left text-xs text-ink-600 transition-colors hover:border-brand-300 hover:text-ink-900 disabled:cursor-not-allowed disabled:opacity-50 dark:border-ink-700 dark:bg-ink-800 dark:text-ink-300 dark:hover:border-brand-500/40"
+                      className="rounded-control border border-line bg-surface px-2.5 py-2 text-left text-xs text-fg-muted transition-colors hover:border-accent/40 hover:text-fg disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       {p}
                     </button>
@@ -100,8 +98,8 @@ export function TemplateChat({ onClose }: TemplateChatProps) {
                   key={i}
                   className={
                     m.role === "user"
-                      ? "ml-auto max-w-[85%] rounded-2xl bg-brand-500 px-3 py-2 text-sm text-white"
-                      : "max-w-[90%] rounded-2xl bg-white px-3 py-2 text-sm text-ink-700 shadow-sm dark:bg-ink-900 dark:text-ink-200"
+                      ? "ml-auto max-w-[85%] rounded-2xl bg-accent px-3 py-2 text-sm text-accent-fg"
+                      : "max-w-[90%] rounded-2xl bg-surface px-3 py-2 text-sm text-fg-muted shadow-sm"
                   }
                 >
                   {m.content}
@@ -109,17 +107,17 @@ export function TemplateChat({ onClose }: TemplateChatProps) {
               ))
             )}
             {chatMutation.isPending && (
-              <div className="flex items-center gap-2 text-xs text-ink-400 dark:text-ink-500">
-                <Spinner className="h-3.5 w-3.5" /> Thinking…
+              <div className="flex items-center gap-2 text-xs text-fg-subtle">
+                <Spinner className="h-3.5 w-3.5" /> Thinking&hellip;
               </div>
             )}
           </div>
 
-          {chatError && <p className="text-xs text-red-600 dark:text-red-400">{chatError}</p>}
+          {chatError && <p className="text-xs text-critical">{chatError}</p>}
 
           <div className="flex items-center gap-2">
             <input
-              className="h-10 flex-1 rounded-pill border border-ink-200 bg-white px-3.5 text-sm text-ink-900 outline-none transition-colors placeholder:text-ink-400 focus:border-brand-400 dark:border-ink-700 dark:bg-ink-800 dark:text-white dark:placeholder:text-ink-500"
+              className="h-10 flex-1 rounded-pill border border-line bg-surface px-3.5 text-sm text-fg outline-none transition-colors placeholder:text-fg-subtle focus:border-accent"
               placeholder="e.g. make it shorter, add a PS line…"
               value={question}
               onChange={(e) => setQuestion(e.target.value)}
@@ -129,7 +127,7 @@ export function TemplateChat({ onClose }: TemplateChatProps) {
               type="button"
               onClick={() => handleSend()}
               disabled={!question.trim() || chatMutation.isPending}
-              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brand-500 text-white transition-all hover:scale-105 hover:bg-brand-400 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:scale-100"
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent text-accent-fg transition-colors hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-40"
             >
               {chatMutation.isPending ? <Spinner className="h-4 w-4" /> : <ArrowUp className="h-4 w-4" />}
             </button>
@@ -137,34 +135,30 @@ export function TemplateChat({ onClose }: TemplateChatProps) {
         </div>
 
         {/* Live draft column */}
-        <div className="flex flex-col gap-3 border-t border-ink-100 pt-4 lg:border-l lg:border-t-0 lg:pl-5 lg:pt-0 dark:border-ink-700">
+        <div className="flex flex-col gap-3 border-t border-line pt-4 lg:border-l lg:border-t-0 lg:pl-5 lg:pt-0">
           {!draft ? (
-            <div className="flex flex-1 items-center justify-center rounded-xl border border-dashed border-ink-200 p-6 text-center text-sm text-ink-400 dark:border-ink-700 dark:text-ink-500">
-              Your drafted template will appear here as you chat — subject and body update live with each reply.
+            <div className="flex flex-1 flex-col gap-3 opacity-50">
+              {/* A dimmed preview of the form that appears once a draft exists, so
+                  the empty state shows real structure instead of a blank box. */}
+              <p className="text-xs font-semibold uppercase tracking-wider text-fg-subtle">Live draft</p>
+              <div className="h-10 rounded-control border border-line bg-surface-2" />
+              <div className="h-32 rounded-control border border-line bg-surface-2" />
+              <p className="text-center text-sm text-fg-subtle">
+                Your draft will appear here as you chat &mdash; subject and body update live with each reply.
+              </p>
             </div>
           ) : (
             <>
-              <p className="text-xs font-semibold uppercase tracking-wider text-ink-400">Live draft</p>
-              <Input
-                value={draft.subject}
-                onChange={(e) => setDraft((d) => (d ? { ...d, subject: e.target.value } : d))}
-              />
-              <Textarea
-                rows={8}
-                value={draft.body}
-                onChange={(e) => setDraft((d) => (d ? { ...d, body: e.target.value } : d))}
-              />
+              <p className="text-xs font-semibold uppercase tracking-wider text-fg-subtle">Live draft</p>
+              <Input value={draft.subject} onChange={(e) => setDraft((d) => (d ? { ...d, subject: e.target.value } : d))} />
+              <Textarea rows={8} value={draft.body} onChange={(e) => setDraft((d) => (d ? { ...d, body: e.target.value } : d))} />
               <div className="flex gap-2 pt-1">
-                <Input
-                  placeholder="Template name"
-                  value={templateName}
-                  onChange={(e) => setTemplateName(e.target.value)}
-                />
+                <Input placeholder="Template name" value={templateName} onChange={(e) => setTemplateName(e.target.value)} />
                 <Button onClick={() => saveMutation.mutate()} disabled={!templateName || saveMutation.isPending}>
                   <Save className="h-4 w-4" /> {saveMutation.isPending ? "Saving…" : "Save"}
                 </Button>
               </div>
-              {savedMessage && <p className="text-sm text-lime-600 dark:text-lime-400">{savedMessage}</p>}
+              {savedMessage && <p className="text-sm text-positive">{savedMessage}</p>}
             </>
           )}
         </div>

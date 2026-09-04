@@ -1,8 +1,10 @@
 """Mirrors packages/server/src/models/Resume.model.ts — same "resumes"
 collection, plus the separate "resumefiles" collection storing the original
-uploaded bytes. One resume per user — re-uploading replaces both documents
-wholesale so stale chunks/vectors from a previous resume can never survive
-alongside new ones."""
+uploaded bytes. Many resumes per user, one of them flagged `isPrimary` —
+the "Ask My Resume"/Career Fit/Roadmap/Interview Prep/Outreach Draft
+consumers all default to whichever one that is when a caller doesn't ask
+for a specific resume by id. Uploading never replaces an existing resume
+any more; ResumeFile is 1:1 with a Resume (via resumeId), not with a user."""
 
 from __future__ import annotations
 
@@ -26,15 +28,18 @@ class Resume(Document):
     sizeBytes: int
     content: str
     chunks: list[ResumeChunk] = Field(default_factory=list)
+    isPrimary: bool = False
+    targetRole: str | None = None
     createdAt: datetime = Field(default_factory=lambda: datetime.now(UTC))
     updatedAt: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
     class Settings:
         name = "resumes"
-        indexes = [IndexModel([("userId", 1)], unique=True)]
+        indexes = [IndexModel([("userId", 1), ("createdAt", -1)])]
 
 
 class ResumeFile(Document):
+    resumeId: PydanticObjectId
     userId: PydanticObjectId
     fileName: str
     mimeType: str
@@ -44,4 +49,4 @@ class ResumeFile(Document):
 
     class Settings:
         name = "resumefiles"
-        indexes = [IndexModel([("userId", 1)], unique=True)]
+        indexes = [IndexModel([("resumeId", 1)], unique=True)]
