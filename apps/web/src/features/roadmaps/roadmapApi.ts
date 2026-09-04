@@ -6,8 +6,8 @@ export async function fetchRoadmaps() {
   return res.data;
 }
 
-export async function generateRoadmap(goal: string, personalize: boolean) {
-  const res = await apiClient.post<Roadmap>("/roadmaps", { goal, personalize });
+export async function generateRoadmap(goal: string, personalize: boolean, resumeId?: string) {
+  const res = await apiClient.post<Roadmap>("/roadmaps", { goal, personalize, resumeId });
   return res.data;
 }
 

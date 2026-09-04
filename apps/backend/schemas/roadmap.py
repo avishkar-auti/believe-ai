@@ -3,6 +3,7 @@ Roadmap type."""
 
 from __future__ import annotations
 
+from beanie import PydanticObjectId
 from pydantic import BaseModel, Field
 
 from models.roadmap import RoadmapDifficulty, RoadmapResourceType, SkillStatus
@@ -11,6 +12,7 @@ from models.roadmap import RoadmapDifficulty, RoadmapResourceType, SkillStatus
 class GenerateRoadmapInput(BaseModel):
     goal: str = Field(min_length=1)
     personalize: bool = True
+    resumeId: PydanticObjectId | None = None
 
 
 class RoadmapResourceDto(BaseModel):

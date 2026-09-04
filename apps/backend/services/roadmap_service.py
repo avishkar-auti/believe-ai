@@ -36,11 +36,16 @@ logger = get_logger(__name__)
 
 
 async def build_roadmap_for_user(
-    settings: Settings, db: AsyncIOMotorDatabase, user_id: ObjectId, goal: str, personalize: bool = True
+    settings: Settings,
+    db: AsyncIOMotorDatabase,
+    user_id: ObjectId,
+    goal: str,
+    personalize: bool = True,
+    resume_id: ObjectId | None = None,
 ) -> RoadmapResult:
     resume_text = ""
     if personalize:
-        resume = await resumes_repository.find_by_user_id(db, user_id)
+        resume = await resumes_repository.resolve_for_user(db, user_id, resume_id)
         if resume:
             resume_text = resume["content"]
 
@@ -120,12 +125,17 @@ async def _enrich_stage(settings: Settings, stage: AiRoadmapStage, goal: str) ->
 
 
 async def generate_and_save(
-    settings: Settings, db: AsyncIOMotorDatabase, user_id: ObjectId, goal: str, personalize: bool = True
+    settings: Settings,
+    db: AsyncIOMotorDatabase,
+    user_id: ObjectId,
+    goal: str,
+    personalize: bool = True,
+    resume_id: ObjectId | None = None,
 ) -> RoadmapDto:
     """Mirrors apps/api's roadmap.service.ts's generate() — calls the AI
     generation above, enriches every stage with real YouTube videos +
     documentation, then persists the result as its own history entry."""
-    result = await build_roadmap_for_user(settings, db, user_id, goal, personalize)
+    result = await build_roadmap_for_user(settings, db, user_id, goal, personalize, resume_id)
 
     enriched_stages = await asyncio.gather(*(_enrich_stage(settings, stage, result.goal) for stage in result.stages))
     stages = [

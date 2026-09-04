@@ -22,7 +22,7 @@ async def list_roadmaps_route(mongo_user_id: MongoUserIdDep, page: int = 1, limi
 async def generate_roadmap_route(
     body: GenerateRoadmapInput, settings: SettingsDep, db: DbDep, mongo_user_id: MongoUserIdDep, _user_id: UserIdDep
 ) -> RoadmapDto:
-    return await roadmap_service.generate_and_save(settings, db, mongo_user_id, body.goal, body.personalize)
+    return await roadmap_service.generate_and_save(settings, db, mongo_user_id, body.goal, body.personalize, body.resumeId)
 
 
 @router.get("/{roadmap_id}", response_model=RoadmapDto)
