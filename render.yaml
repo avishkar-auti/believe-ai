@@ -1,0 +1,172 @@
+# Render Blueprint — deploys the whole app in one "New Blueprint" pass.
+# https://render.com/docs/blueprint-spec
+#
+# Written against the `runtime:` field name (python/static/node, replacing
+# the older `env:` key in Render's spec) — I can't confirm this is still
+# current from here. If "Apply" rejects a service with an unrecognized-field
+# error, that's almost certainly this: swap `runtime:` for `env:` on the
+# service(s) it names and re-apply. Everything else in this file is
+# independent of that naming.
+#
+# What this does NOT do, and why:
+#   - Provision MongoDB. Render has no managed MongoDB; MONGODB_URI must
+#     point at an external cluster (MongoDB Atlas's free tier is the usual
+#     choice) and is left blank below for you to paste into the dashboard.
+#   - Fill in any secret (Firebase, Gemini/Groq, ENCRYPTION_KEY, …). Render
+#     Blueprints intentionally never let a value live in this file for
+#     `sync: false` vars — you paste those once in the dashboard after the
+#     first "Apply", and they're never in git.
+#
+# One-time setup this file can't do for you:
+#   1. New Blueprint → connect this repo → Apply. Render creates the three
+#      services and the Redis instance below, all failing to boot until (2).
+#   2. Each backend service → Environment tab → fill in every `sync: false`
+#      var (values come from apps/backend/.env — never commit that file).
+#   3. web (the frontend)'s VITE_API_BASE_URL should be the backend's
+#      Render URL (shown on the backend service's page) plus no trailing
+#      slash; then trigger a manual redeploy of `web` so Vite bakes it in
+#      (VITE_* vars are inlined at build time, not read at runtime).
+#   4. Backend's CORS_ORIGIN should be the frontend's Render URL once you
+#      know it; APP_BASE_URL should be the backend's OWN Render URL (it
+#      builds the {app_base_url}/t/open/... tracking-pixel and click links
+#      in outbound campaign emails — see worker/jobs/send_campaign_email.py).
+#      Redeploy the backend and worker after setting either.
+#
+#   Known pre-existing gap, not introduced by this file: api/routes/
+#   integrations.py also reads APP_BASE_URL, but to redirect the browser
+#   back to a *frontend* route after a Gmail/Outlook OAuth connect
+#   (`{app_base_url}/settings/integrations?...`). One setting can't
+#   correctly be both the backend's own URL and the frontend's URL at
+#   once. Campaign tracking links matter more of the two and are what
+#   APP_BASE_URL is set to below, so on this deploy, finishing a Gmail/
+#   Outlook OAuth connect will redirect to a 404 on the backend instead
+#   of back to the app. Fix (not applied here, out of scope for a deploy
+#   config): add a separate FRONTEND_URL setting and point
+#   integrations.py at that instead.
+#
+# Plan note: every `plan: free` below is a starting point, not a promise —
+# Render's free-tier availability for background workers and Redis has
+# changed over time and I can't confirm current pricing from here. Render
+# will tell you plainly at "Apply" time if a plan needs upgrading; nothing
+# here purchases anything on its own, and I won't select a paid plan
+# without asking you first.
+
+services:
+  # FastAPI app — every HTTP route.
+  - type: web
+    name: believe-ai-backend
+    runtime: python
+    plan: free
+    rootDir: apps/backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.1
+      - key: CORS_ORIGIN
+        sync: false # the frontend's Render URL, e.g. https://believe-ai-web.onrender.com
+      - key: MONGODB_URI
+        sync: false # external MongoDB Atlas connection string — Render doesn't host Mongo
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: believe-ai-redis
+          property: connectionString
+      - key: ENCRYPTION_KEY
+        sync: false
+      - key: APP_BASE_URL
+        sync: false # this service's own public URL once known — used to build tracking links
+      - key: AI_PROVIDER_ORDER
+        value: gemini,groq
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: GEMINI_MODEL
+        value: gemini-flash-latest
+      - key: GEMINI_EMBEDDING_MODEL
+        value: gemini-embedding-001
+      - key: GROQ_API_KEY
+        sync: false
+      - key: GROQ_MODEL
+        value: llama-3.3-70b-versatile
+      - key: FIREBASE_PROJECT_ID
+        sync: false
+      - key: FIREBASE_CLIENT_EMAIL
+        sync: false
+      - key: FIREBASE_PRIVATE_KEY
+        sync: false
+
+  # Same codebase, same env, different process — the arq queue consumer
+  # that actually sends campaign emails and follow-ups. Without this
+  # running as its own service, jobs enqueue and never fire (see
+  # apps/backend/README.md's "Run the background worker in a separate
+  # process" note).
+  - type: worker
+    name: believe-ai-worker
+    runtime: python
+    plan: free
+    rootDir: apps/backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: arq worker.settings.WorkerSettings
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.1
+      - key: MONGODB_URI
+        sync: false
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: believe-ai-redis
+          property: connectionString
+      - key: ENCRYPTION_KEY
+        sync: false
+      - key: APP_BASE_URL
+        sync: false
+      - key: AI_PROVIDER_ORDER
+        value: gemini,groq
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: GEMINI_MODEL
+        value: gemini-flash-latest
+      - key: GROQ_API_KEY
+        sync: false
+      - key: GROQ_MODEL
+        value: llama-3.3-70b-versatile
+      - key: FIREBASE_PROJECT_ID
+        sync: false
+      - key: FIREBASE_CLIENT_EMAIL
+        sync: false
+      - key: FIREBASE_PRIVATE_KEY
+        sync: false
+
+  # Vite SPA. Built from the repo root (not apps/web) because it depends
+  # on the pnpm workspace's packages/shared, which must be built first.
+  - type: web
+    name: believe-ai-web
+    runtime: static
+    plan: free
+    buildCommand: corepack enable && pnpm install --frozen-lockfile && pnpm --filter @believe-ai/shared build && pnpm --filter @believe-ai/web build
+    staticPublishPath: apps/web/dist
+    # A client-side router needs every path served index.html, or a
+    # refresh on e.g. /app/campaigns 404s instead of reaching React Router.
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    envVars:
+      - key: VITE_API_BASE_URL
+        sync: false # the backend service's Render URL — see step 3 above
+      - key: VITE_FIREBASE_API_KEY
+        sync: false
+      - key: VITE_FIREBASE_AUTH_DOMAIN
+        sync: false
+      - key: VITE_FIREBASE_PROJECT_ID
+        sync: false
+      - key: VITE_FIREBASE_APP_ID
+        sync: false
+
+# Render's managed Redis — backs both the API and the worker's arq queue.
+redis:
+  - name: believe-ai-redis
+    plan: free
+    ipAllowList: [] # only reachable from services in this same Render project
