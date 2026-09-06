@@ -12,6 +12,7 @@ database.
 from models.achievement import Achievement
 from models.audit_log import AuditLog
 from models.campaign import Campaign
+from models.campaign_link import CampaignLink
 from models.career_fit import CareerFit
 from models.certification import Certification
 from models.contact import Contact
@@ -19,6 +20,7 @@ from models.design_project import DesignProject
 from models.design_screen import DesignScreen
 from models.discussion import Discussion
 from models.education import Education
+from models.email_event import EmailEvent
 from models.email_log import EmailLog
 from models.experience import Experience
 from models.external_api_usage import ExternalApiUsage
@@ -67,7 +69,9 @@ ALL_DOCUMENT_MODELS = [
     Template,
     UnsubscribeRecord,
     Campaign,
+    CampaignLink,
     EmailLog,
+    EmailEvent,
     Feedback,
     Integration,
     Discussion,
@@ -111,6 +115,7 @@ __all__ = [
     "Achievement",
     "AuditLog",
     "Campaign",
+    "CampaignLink",
     "CareerFit",
     "Certification",
     "Challenge",
@@ -119,6 +124,7 @@ __all__ = [
     "DesignScreen",
     "Discussion",
     "Education",
+    "EmailEvent",
     "EmailLog",
     "Experience",
     "ExternalApiUsage",

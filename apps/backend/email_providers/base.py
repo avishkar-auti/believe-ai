@@ -28,6 +28,11 @@ class SendEmailInput:
 @dataclass
 class SendEmailResult:
     provider_message_id: str
+    # Populated when the provider's own send response carries a thread/
+    # conversation identifier — used for reply-correlation instead of
+    # guessing from the subject line. None when the provider doesn't return
+    # one (e.g. Outlook's sendMail, which responds 202 with no body).
+    thread_id: str | None = None
 
 
 class EmailProvider(Protocol):

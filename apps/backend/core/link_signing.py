@@ -46,6 +46,7 @@ def is_allowed_redirect_protocol(url: str) -> bool:
 
 
 _HREF_PATTERN = re.compile(r"""(<a\b[^>]*?\bhref\s*=\s*)(["'])(.*?)\2""", re.IGNORECASE)
+_ANCHOR_PATTERN = re.compile(r"""<a\b[^>]*?\bhref\s*=\s*(["'])(.*?)\1[^>]*>(.*?)</a>""", re.IGNORECASE | re.DOTALL)
 
 
 def _decode_href(href: str) -> str:
@@ -61,18 +62,42 @@ def _encode_href(url: str) -> str:
     return url.replace("&", "&amp;").replace('"', "&quot;")
 
 
+def extract_anchor_links(html: str) -> list[tuple[str, str]]:
+    """Returns (destination_url, anchor_text) for every distinct http(s)
+    `<a href>` in html, in first-seen order — anchor text has any nested tags
+    stripped, used only as a classification hint (e.g. "My Resume"), never
+    rendered anywhere."""
+    seen: dict[str, str] = {}
+    for match in _ANCHOR_PATTERN.finditer(html):
+        destination = _decode_href(match.group(2).strip())
+        if not is_allowed_redirect_protocol(destination) or destination in seen:
+            continue
+        text = re.sub(r"<[^>]+>", " ", match.group(3))
+        seen[destination] = re.sub(r"\s+", " ", text).strip()
+    return list(seen.items())
+
+
 def rewrite_links_for_tracking(
     html: str,
     tracking_token: str,
     api_base_url: str,
     encryption_key_hex: str,
     skip_urls: list[str] | None = None,
+    link_ids: dict[str, str] | None = None,
 ) -> str:
     """Rewrites http(s) anchor targets to route through the click-tracking
     endpoint. Anything else — mailto:, tel:, in-message anchors, and any URL
-    in skip_urls — is left exactly as authored."""
+    in skip_urls — is left exactly as authored.
+
+    `link_ids` (destination URL -> CampaignLink id) is optional and purely an
+    attribution hint carried as an unsigned `l` query param: redirect safety
+    rests entirely on `u`+`s` (unchanged, so links already sent before this
+    field existed keep verifying), so a missing/tampered `l` can only cause a
+    click to go unattributed to a specific link — never an unsafe redirect.
+    """
     skip = set(skip_urls or [])
     base = api_base_url.rstrip("/")
+    link_ids = link_ids or {}
 
     def _replace(match: re.Match[str]) -> str:
         prefix, quote_char, raw_href = match.group(1), match.group(2), match.group(3)
@@ -86,6 +111,9 @@ def rewrite_links_for_tracking(
 
         signature = sign_tracked_url(destination, encryption_key_hex)
         tracked = f"{base}/t/click/{quote(tracking_token, safe='')}?u={quote(destination, safe='')}&s={signature}"
+        link_id = link_ids.get(destination)
+        if link_id:
+            tracked += f"&l={quote(link_id, safe='')}"
         return f"{prefix}{quote_char}{_encode_href(tracked)}{quote_char}"
 
     return _HREF_PATTERN.sub(_replace, html)

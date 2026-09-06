@@ -12,7 +12,7 @@ from motor.motor_asyncio import AsyncIOMotorDatabase
 from agents.personalization_agent import personalize_email
 from core.config import Settings
 from core.errors import NotFoundError
-from repositories import campaigns_repository, contacts_repository, templates_repository, user_contexts_repository
+from repositories import campaign_repository, contacts_repository, templates_repository, user_contexts_repository
 from schemas.ai import AiPersonalizeRequest, AiPersonalizeResult, ContactPersonalizationInput
 from utils.user_context import format_user_context_for_prompt
 
@@ -24,11 +24,11 @@ async def personalize_for_contact(
     campaign_id: ObjectId,
     contact_id: ObjectId,
 ) -> AiPersonalizeResult:
-    campaign = await campaigns_repository.find_by_id_scoped(db, campaign_id, user_id)
+    campaign = await campaign_repository.find_by_id(campaign_id, user_id)
     if not campaign:
         raise NotFoundError("Campaign not found")
 
-    template = await templates_repository.find_by_id_scoped(db, campaign["templateId"], user_id)
+    template = await templates_repository.find_by_id_scoped(db, campaign.templateId, user_id)
     if not template:
         raise NotFoundError("Campaign's template no longer exists")
 
@@ -39,7 +39,7 @@ async def personalize_for_contact(
     profile = await user_contexts_repository.find_by_user_id(db, user_id)
 
     req = AiPersonalizeRequest(
-        templateSubject=campaign.get("subject") or template["subject"],
+        templateSubject=campaign.subject or template["subject"],
         templateBody=template["body"],
         contact=ContactPersonalizationInput(
             firstName=contact["firstName"],

@@ -10,23 +10,36 @@ from typing import Any
 
 from bson import ObjectId
 
+from agents.email_writer_agent import generate_email
+from core.config import Settings
 from core.errors import InvalidStateTransitionError, NotFoundError, ValidationError
 from models.campaign import CAMPAIGN_STATUS_TRANSITIONS, Campaign, CampaignStatus
-from models.email_log import EmailLog
+from models.campaign_link import LinkCategory
+from models.email_log import EmailLog, EmailLogStatus
+from models.portfolio_project import PortfolioProject
 from repositories import (
+    campaign_link_repository,
     campaign_repository,
     contact_repository,
+    email_event_repository,
     email_log_repository,
     resume_repository,
     template_repository,
     unsubscribe_repository,
 )
+from repositories.email_log_repository import RecipientSegment
+from schemas.ai import AiEmailGenerationRequest, AiEmailGenerationResult
 from schemas.campaign import (
     CampaignAnalytics,
     CampaignDto,
     CampaignFollowUpDto,
+    CampaignLinkDto,
     CreateCampaignInput,
+    EmailEventDto,
     EmailLogDto,
+    EngagementTimeseriesPoint,
+    InsightActionCardDto,
+    ProjectEngagementDto,
     UpdateCampaignInput,
 )
 from schemas.pagination import PaginatedResult, total_pages
@@ -34,8 +47,27 @@ from services import usage_service
 from utils.mongo_datetime import as_aware_utc
 from worker.client import get_worker_pool
 
-_TERMINAL_TO_SENT_STATUSES = ("SENT", "DELIVERED", "OPENED", "CLICKED", "REPLIED")
 _DAY_MS = 86_400_000
+
+_CATEGORY_LABELS: dict[LinkCategory, str] = {
+    "RESUME": "resume",
+    "PORTFOLIO": "portfolio",
+    "GITHUB": "GitHub",
+    "LINKEDIN": "LinkedIn",
+    "PROJECT": "project link",
+    "CODING_PROFILE": "coding profile",
+    "CERTIFICATE": "certificate",
+    "PERSONAL_WEBSITE": "personal website",
+    "OTHER": "link",
+}
+
+
+def _rate(numerator: int, denominator: int) -> float:
+    return round((numerator / denominator) * 1000) / 10 if denominator > 0 else 0.0
+
+
+def _iso(value: datetime | None) -> str | None:
+    return value.isoformat() if value else None
 
 
 def _to_dto(doc: Campaign) -> CampaignDto:
@@ -63,24 +95,43 @@ def _to_dto(doc: Campaign) -> CampaignDto:
     )
 
 
-def _email_log_to_dto(doc: EmailLog) -> EmailLogDto:
+def _recipient_row_to_dto(row: dict) -> EmailLogDto:
+    """Builds an EmailLogDto from the joined dict rows
+    email_log_repository.list_for_campaign_filtered returns (contact fields
+    included) — the shape the recipient table's filters/segments query."""
     return EmailLogDto(
-        id=str(doc.id),
-        campaignId=str(doc.campaignId),
-        contactId=str(doc.contactId),
-        userId=str(doc.userId),
-        stepIndex=doc.stepIndex,
-        status=doc.status,
-        providerMessageId=doc.providerMessageId,
-        trackingToken=doc.trackingToken,
-        openCount=doc.openCount,
-        clickCount=doc.clickCount,
-        replied=doc.replied,
-        errorMessage=doc.errorMessage,
-        sentAt=doc.sentAt.isoformat() if doc.sentAt else None,
-        openedAt=doc.openedAt.isoformat() if doc.openedAt else None,
-        createdAt=doc.createdAt.isoformat(),
-        updatedAt=doc.updatedAt.isoformat(),
+        id=str(row["_id"]),
+        campaignId=str(row["campaignId"]),
+        contactId=str(row["contactId"]),
+        userId=str(row["userId"]),
+        stepIndex=row["stepIndex"],
+        status=row["status"],
+        providerMessageId=row.get("providerMessageId"),
+        trackingToken=row["trackingToken"],
+        openCount=row["openCount"],
+        clickCount=row["clickCount"],
+        opened=row.get("opened", False),
+        lastOpenedAt=_iso(row.get("lastOpenedAt")),
+        clicked=row.get("clicked", False),
+        firstClickedAt=_iso(row.get("firstClickedAt")),
+        lastClickedAt=_iso(row.get("lastClickedAt")),
+        replied=row["replied"],
+        replyCount=row.get("replyCount", 0),
+        firstRepliedAt=_iso(row.get("firstRepliedAt")),
+        lastRepliedAt=_iso(row.get("lastRepliedAt")),
+        bounced=row.get("bounced", False),
+        bouncedAt=_iso(row.get("bouncedAt")),
+        bounceReason=row.get("bounceReason"),
+        unsubscribed=row.get("unsubscribed", False),
+        lastActivityAt=_iso(row.get("lastActivityAt")),
+        errorMessage=row.get("errorMessage"),
+        sentAt=_iso(row.get("sentAt")),
+        openedAt=_iso(row.get("openedAt")),
+        createdAt=row["createdAt"].isoformat(),
+        updatedAt=row["updatedAt"].isoformat(),
+        contactName=row.get("contactName"),
+        contactEmail=row.get("contactEmail"),
+        contactCompany=row.get("contactCompany"),
     )
 
 
@@ -260,45 +311,193 @@ async def cancel(campaign_id: ObjectId, user_id: ObjectId) -> CampaignDto:
 
 async def get_analytics(campaign_id: ObjectId, user_id: ObjectId) -> CampaignAnalytics:
     await get_by_id(campaign_id, user_id)
-    rows = await email_log_repository.aggregate_by_campaign(campaign_id)
-    counts: dict[str, int] = {row["_id"]: row["count"] for row in rows}
+    counts = await email_log_repository.aggregate_engagement_by_campaign(campaign_id)
 
-    sent = sum(counts.get(s, 0) for s in _TERMINAL_TO_SENT_STATUSES)
+    sent = counts["sent"]
+    # `delivered` stays aliased to `sent` on purpose — see the field's
+    # docstring in schemas/campaign.py. No provider webhook in this codebase
+    # can independently confirm inbox delivery.
     delivered = sent
-    opened = sum(counts.get(s, 0) for s in ("OPENED", "CLICKED", "REPLIED"))
-    clicked = sum(counts.get(s, 0) for s in ("CLICKED", "REPLIED"))
-    replied = counts.get("REPLIED", 0)
-    bounced = counts.get("BOUNCED", 0)
-    failed = counts.get("FAILED", 0)
-
-    def rate(numerator: int, denominator: int) -> float:
-        return round((numerator / denominator) * 1000) / 10 if denominator > 0 else 0.0
 
     return CampaignAnalytics(
         sent=sent,
         delivered=delivered,
-        opened=opened,
-        clicked=clicked,
-        replied=replied,
-        bounced=bounced,
-        failed=failed,
-        openRate=rate(opened, sent),
-        clickRate=rate(clicked, sent),
-        replyRate=rate(replied, sent),
-        bounceRate=rate(bounced, sent),
+        uniqueOpened=counts["uniqueOpened"],
+        totalOpens=counts["totalOpens"],
+        uniqueClicked=counts["uniqueClicked"],
+        totalClicks=counts["totalClicks"],
+        replied=counts["replied"],
+        bounced=counts["bounced"],
+        failed=counts["failed"],
+        unsubscribed=counts["unsubscribed"],
+        openRate=_rate(counts["uniqueOpened"], delivered),
+        clickRate=_rate(counts["uniqueClicked"], delivered),
+        replyRate=_rate(counts["replied"], delivered),
+        bounceRate=_rate(counts["bounced"], delivered),
     )
 
 
-async def list_recipients(campaign_id: ObjectId, user_id: ObjectId, page: int, limit: int) -> PaginatedResult[EmailLogDto]:
+async def list_recipients(
+    campaign_id: ObjectId,
+    user_id: ObjectId,
+    page: int,
+    limit: int,
+    *,
+    status: EmailLogStatus | None = None,
+    segment: RecipientSegment | None = None,
+    search: str | None = None,
+) -> PaginatedResult[EmailLogDto]:
     await get_by_id(campaign_id, user_id)
-    items, total = await email_log_repository.list_for_campaign(campaign_id, page, limit)
+    rows, total = await email_log_repository.list_for_campaign_filtered(
+        campaign_id, page, limit, status=status, segment=segment, search=search
+    )
     return PaginatedResult[EmailLogDto](
-        items=[_email_log_to_dto(doc) for doc in items],
+        items=[_recipient_row_to_dto(row) for row in rows],
         page=page,
         limit=limit,
         total=total,
         totalPages=total_pages(total, limit),
     )
+
+
+async def get_recipient_timeline(campaign_id: ObjectId, contact_id: ObjectId, user_id: ObjectId) -> list[EmailEventDto]:
+    """Full engagement history for one recipient — the activity drawer's data."""
+    await get_by_id(campaign_id, user_id)
+    log = await email_log_repository.find_latest_for_contact(campaign_id, contact_id)
+    if not log or not log.id:
+        raise NotFoundError("No email has been sent to this contact for this campaign")
+
+    events = await email_event_repository.list_for_email_log(log.id)
+    links = {str(link.id): link.url for link in await campaign_link_repository.list_for_campaign(campaign_id)}
+    return [
+        EmailEventDto(
+            id=str(event.id),
+            type=event.type,
+            linkId=str(event.linkId) if event.linkId else None,
+            linkUrl=links.get(str(event.linkId)) if event.linkId else None,
+            metadata=event.metadata,
+            createdAt=event.createdAt.isoformat(),
+        )
+        for event in events
+    ]
+
+
+async def get_campaign_links(campaign_id: ObjectId, user_id: ObjectId) -> list[CampaignLinkDto]:
+    """Top Clicked Links — every distinct professional link the campaign's
+    template pointed to, ranked by real click counts."""
+    await get_by_id(campaign_id, user_id)
+    links = await campaign_link_repository.list_for_campaign(campaign_id)
+    return [
+        CampaignLinkDto(id=str(link.id), url=link.url, category=link.category, label=link.label, clickCount=link.clickCount)
+        for link in links
+    ]
+
+
+async def get_engagement_timeseries(campaign_id: ObjectId, user_id: ObjectId) -> list[EngagementTimeseriesPoint]:
+    await get_by_id(campaign_id, user_id)
+    rows = await email_event_repository.engagement_over_time(campaign_id, ["SENT", "OPENED", "CLICKED", "REPLIED"])
+
+    by_date: dict[str, dict[str, int]] = {}
+    for row in rows:
+        date = row["_id"]["date"]
+        event_type = row["_id"]["type"]
+        by_date.setdefault(date, {"SENT": 0, "OPENED": 0, "CLICKED": 0, "REPLIED": 0})[event_type] = row["count"]
+
+    return [
+        EngagementTimeseriesPoint(date=date, sent=counts["SENT"], opened=counts["OPENED"], clicked=counts["CLICKED"], replied=counts["REPLIED"])
+        for date, counts in sorted(by_date.items())
+    ]
+
+
+async def get_top_projects(campaign_id: ObjectId, user_id: ObjectId) -> list[ProjectEngagementDto]:
+    """Most Viewed Projects — only ever a link that matches one of the
+    user's own PortfolioProject entries (by URL); a campaign link with no
+    match (e.g. a raw GitHub org URL, not a listed project) is simply not a
+    "project" this list can name, so it's excluded rather than guessed at."""
+    await get_by_id(campaign_id, user_id)
+    links = await campaign_link_repository.list_for_campaign(campaign_id)
+    projects = await PortfolioProject.find(PortfolioProject.userId == user_id).to_list()
+
+    url_to_project: dict[str, PortfolioProject] = {}
+    for project in projects:
+        for url in (project.githubUrl, project.liveUrl):
+            if url:
+                url_to_project[url.rstrip("/")] = project
+
+    matched = [
+        ProjectEngagementDto(
+            id=str(link.id),
+            name=project.name,
+            description=project.description,
+            url=link.url,
+            category=link.category,
+            clickCount=link.clickCount,
+        )
+        for link in links
+        if (project := url_to_project.get(link.url.rstrip("/")))
+    ]
+    return sorted(matched, key=lambda p: p.clickCount, reverse=True)
+
+
+async def get_insight_action_cards(campaign_id: ObjectId, user_id: ObjectId) -> list[InsightActionCardDto]:
+    """Deterministic, arithmetic-only observations — no AI call, no invented
+    percentages. Complements (doesn't replace) the free-text AI summary in
+    get_campaign_insights, per the "generate deterministic analytics first"
+    rule: these two facts don't need an LLM to be true."""
+    await get_by_id(campaign_id, user_id)
+    cards: list[InsightActionCardDto] = []
+
+    links = [link for link in await campaign_link_repository.list_for_campaign(campaign_id) if link.clickCount > 0]
+    if links:
+        top = links[0]
+        rest = links[1:]
+        rest_avg = sum(link.clickCount for link in rest) / len(rest) if rest else 0
+        label = _CATEGORY_LABELS[top.category]
+        if rest_avg > 0 and top.clickCount > rest_avg:
+            multiplier = round(top.clickCount / rest_avg, 1)
+            body = f"Recruiters click your {label} about {multiplier}x more than your other links."
+        else:
+            body = f"Your {label} is the only link recruiters have clicked so far."
+        cards.append(InsightActionCardDto(icon="trending", title=f"Your {label} is getting noticed", body=body))
+
+    _, engaged_no_reply_count = await email_log_repository.list_for_campaign_filtered(campaign_id, 1, 1, segment="clicked_no_reply")
+    if engaged_no_reply_count > 0:
+        plural = "s" if engaged_no_reply_count != 1 else ""
+        cards.append(
+            InsightActionCardDto(
+                icon="users",
+                title=f"{engaged_no_reply_count} recipient{plural} engaged but haven't replied",
+                body="They opened or clicked something in your email — a personalized follow-up referencing what they looked at is worth trying.",
+            )
+        )
+    return cards
+
+
+async def generate_follow_up_draft(settings: Settings, campaign_id: ObjectId, user_id: ObjectId) -> AiEmailGenerationResult:
+    """Drafts a follow-up email grounded in this campaign's real engagement
+    data — reuses the existing generic email-writer agent (goal/target/tone)
+    rather than adding a new AI-provider capability for what is, underneath,
+    the same "write an email for this situation" task."""
+    campaign = await get_by_id(campaign_id, user_id)
+    _, engaged_no_reply_count = await email_log_repository.list_for_campaign_filtered(campaign_id, 1, 1, segment="clicked_no_reply")
+    if engaged_no_reply_count == 0:
+        raise ValidationError("No engaged-but-unreplied recipients yet — nothing to follow up on.")
+
+    links = [link for link in await campaign_link_repository.list_for_campaign(campaign_id) if link.clickCount > 0]
+    context_parts = [
+        f'This is a follow-up for the "{campaign.name}" job-outreach campaign.',
+        f"{engaged_no_reply_count} recipient(s) opened or clicked a link in the original email but haven't replied yet.",
+    ]
+    if links:
+        context_parts.append(f"Their most-clicked link was the sender's {_CATEGORY_LABELS[links[0].category]} ({links[0].url}).")
+
+    req = AiEmailGenerationRequest(
+        goal="Write a short, warm follow-up email to a recruiter/contact who engaged with a prior outreach email (opened or clicked a link) but hasn't replied yet.",
+        target="A recruiter or hiring contact who showed interest but went quiet",
+        tone="warm, concise, low-pressure — not pushy",
+        context=" ".join(context_parts),
+    )
+    return await generate_email(settings, req)
 
 
 async def mark_replied(campaign_id: ObjectId, contact_id: ObjectId, user_id: ObjectId) -> None:
@@ -307,3 +506,6 @@ async def mark_replied(campaign_id: ObjectId, contact_id: ObjectId, user_id: Obj
     if not log or not log.id:
         raise NotFoundError("No email has been sent to this contact for this campaign")
     await email_log_repository.mark_replied(log.id)
+    await email_event_repository.record(
+        campaign_id=log.campaignId, contact_id=log.contactId, email_log_id=log.id, user_id=log.userId, event_type="REPLIED"
+    )

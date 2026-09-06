@@ -54,16 +54,20 @@ class GmailProvider:
             client_secret=client_secret,
         )
 
-    def _send_sync(self, raw: str) -> str:
+    def _send_sync(self, raw: str) -> tuple[str, str | None]:
         service = build("gmail", "v1", credentials=self._credentials)
         result = service.users().messages().send(userId="me", body={"raw": raw}).execute()
         message_id = result.get("id")
         if not message_id:
             raise RuntimeError("Gmail did not return a message id")
-        return str(message_id)
+        # Gmail groups a whole conversation under one threadId — the first
+        # message in a new thread has threadId == id, so this alone can't
+        # yet distinguish "the recipient replied" from "we sent one email";
+        # it's the anchor a real inbound-reply integration would match against.
+        return str(message_id), (str(result["threadId"]) if result.get("threadId") else None)
 
     async def send_email(self, input_: SendEmailInput) -> SendEmailResult:
         raw_bytes = _build_mime_message(input_)
         raw = base64.urlsafe_b64encode(raw_bytes).decode("ascii").rstrip("=")
-        message_id = await asyncio.to_thread(self._send_sync, raw)
-        return SendEmailResult(provider_message_id=message_id)
+        message_id, thread_id = await asyncio.to_thread(self._send_sync, raw)
+        return SendEmailResult(provider_message_id=message_id, thread_id=thread_id)

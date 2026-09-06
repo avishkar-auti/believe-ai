@@ -6,12 +6,11 @@ rollup numbers to the insights agent — never per-recipient data.
 from __future__ import annotations
 
 from bson import ObjectId
-from motor.motor_asyncio import AsyncIOMotorDatabase
 
 from agents.insights_agent import analyze_campaign
 from core.config import Settings
 from core.errors import NotFoundError
-from repositories import campaigns_repository, email_logs_repository
+from repositories import campaign_repository, email_log_repository
 from schemas.ai import AiCampaignInsightRequest, AiCampaignInsightResult
 
 
@@ -22,13 +21,14 @@ def _rate(numerator: int, denominator: int) -> float:
 
 
 async def get_campaign_insights(
-    settings: Settings, db: AsyncIOMotorDatabase, user_id: ObjectId, campaign_id: ObjectId
+    settings: Settings, user_id: ObjectId, campaign_id: ObjectId
 ) -> AiCampaignInsightResult:
-    campaign = await campaigns_repository.find_by_id_scoped(db, campaign_id, user_id)
+    campaign = await campaign_repository.find_by_id(campaign_id, user_id)
     if not campaign:
         raise NotFoundError("Campaign not found")
 
-    counts = await email_logs_repository.aggregate_status_counts(db, campaign_id)
+    rows = await email_log_repository.aggregate_by_campaign(campaign_id)
+    counts: dict[str, int] = {row["_id"]: row["count"] for row in rows}
     sent = sum(counts.get(s, 0) for s in ("SENT", "DELIVERED", "OPENED", "CLICKED", "REPLIED"))
     opened = sum(counts.get(s, 0) for s in ("OPENED", "CLICKED", "REPLIED"))
     clicked = sum(counts.get(s, 0) for s in ("CLICKED", "REPLIED"))
@@ -36,7 +36,7 @@ async def get_campaign_insights(
     bounced = counts.get("BOUNCED", 0)
 
     req = AiCampaignInsightRequest(
-        campaignName=campaign["name"],
+        campaignName=campaign.name,
         sent=sent,
         openRate=_rate(opened, sent),
         clickRate=_rate(clicked, sent),

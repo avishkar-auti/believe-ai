@@ -3,9 +3,13 @@ CampaignAnalytics/EmailLog types and campaign.schema.ts's Zod schemas."""
 
 from __future__ import annotations
 
+from typing import Literal
+
 from pydantic import BaseModel, Field
 
 from models.campaign import CampaignStatus
+from models.campaign_link import LinkCategory
+from models.email_event import EmailEventType
 from models.email_log import EmailLogStatus
 
 
@@ -75,16 +79,75 @@ class CampaignDto(BaseModel):
 
 class CampaignAnalytics(BaseModel):
     sent: int
+    # Aliased to `sent` — no provider webhook in this codebase independently
+    # confirms inbox delivery (see services/campaign_service.py). Never
+    # inferred as "delivered" from anything stronger than "provider accepted
+    # the send request."
     delivered: int
-    opened: int
-    clicked: int
+    uniqueOpened: int
+    totalOpens: int
+    uniqueClicked: int
+    totalClicks: int
     replied: int
     bounced: int
     failed: int
+    unsubscribed: int
+    # Open Rate = Unique Opened / Delivered, etc. — never mixed with totals.
     openRate: float
     clickRate: float
     replyRate: float
     bounceRate: float
+
+
+class EngagementFunnelStage(BaseModel):
+    label: str
+    count: int
+
+
+class EngagementTimeseriesPoint(BaseModel):
+    date: str
+    sent: int
+    opened: int
+    clicked: int
+    replied: int
+
+
+class CampaignLinkDto(BaseModel):
+    id: str
+    url: str
+    category: LinkCategory
+    label: str | None
+    clickCount: int
+
+
+class EmailEventDto(BaseModel):
+    id: str
+    type: EmailEventType
+    linkId: str | None
+    linkUrl: str | None = None
+    metadata: dict
+    createdAt: str
+
+
+class InsightActionCardDto(BaseModel):
+    """A deterministic, arithmetic-only observation — never an AI-invented
+    metric (see services/campaign_service.py::get_insight_action_cards)."""
+
+    icon: Literal["trending", "users"]
+    title: str
+    body: str
+
+
+class ProjectEngagementDto(BaseModel):
+    """Only ever populated from a link that matches one of the user's own
+    PortfolioProject entries by URL — never a guessed/generic project name."""
+
+    id: str
+    name: str
+    description: str | None
+    url: str
+    category: LinkCategory
+    clickCount: int
 
 
 class EmailLogDto(BaseModel):
@@ -98,12 +161,28 @@ class EmailLogDto(BaseModel):
     trackingToken: str
     openCount: int
     clickCount: int
+    opened: bool
+    lastOpenedAt: str | None
+    clicked: bool
+    firstClickedAt: str | None
+    lastClickedAt: str | None
     replied: bool
+    replyCount: int
+    firstRepliedAt: str | None
+    lastRepliedAt: str | None
+    bounced: bool
+    bouncedAt: str | None
+    bounceReason: str | None
+    unsubscribed: bool
+    lastActivityAt: str | None
     errorMessage: str | None
     sentAt: str | None
     openedAt: str | None
     createdAt: str
     updatedAt: str
+    contactName: str | None = None
+    contactEmail: str | None = None
+    contactCompany: str | None = None
 
 
 class MarkRepliedResult(BaseModel):

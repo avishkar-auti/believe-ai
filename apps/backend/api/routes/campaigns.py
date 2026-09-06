@@ -14,8 +14,21 @@ from fastapi import APIRouter
 
 from api.dependencies import DbDep, MongoUserIdDep, SettingsDep, UserIdDep
 from models.campaign import CampaignStatus
-from schemas.ai import AiCampaignInsightResult, AiPersonalizeResult
-from schemas.campaign import CampaignAnalytics, CampaignDto, CreateCampaignInput, EmailLogDto, UpdateCampaignInput
+from models.email_log import EmailLogStatus
+from repositories.email_log_repository import RecipientSegment
+from schemas.ai import AiCampaignInsightResult, AiEmailGenerationResult, AiPersonalizeResult
+from schemas.campaign import (
+    CampaignAnalytics,
+    CampaignDto,
+    CampaignLinkDto,
+    CreateCampaignInput,
+    EmailEventDto,
+    EmailLogDto,
+    EngagementTimeseriesPoint,
+    InsightActionCardDto,
+    ProjectEngagementDto,
+    UpdateCampaignInput,
+)
 from schemas.pagination import DEFAULT_PAGE_SIZE, PaginatedResult
 from services import audit_service, campaign_service
 from services.campaign_insights_service import get_campaign_insights
@@ -47,9 +60,9 @@ async def create_campaign_route(body: CreateCampaignInput, mongo_user_id: MongoU
 
 @router.get("/{campaign_id}/insights", response_model=AiCampaignInsightResult)
 async def campaign_insights_route(
-    campaign_id: str, settings: SettingsDep, db: DbDep, mongo_user_id: MongoUserIdDep, _user_id: UserIdDep
+    campaign_id: str, settings: SettingsDep, mongo_user_id: MongoUserIdDep, _user_id: UserIdDep
 ) -> AiCampaignInsightResult:
-    return await get_campaign_insights(settings, db, mongo_user_id, parse_object_id(campaign_id, "campaign_id"))
+    return await get_campaign_insights(settings, mongo_user_id, parse_object_id(campaign_id, "campaign_id"))
 
 
 @router.post("/{campaign_id}/contacts/{contact_id}/personalize", response_model=AiPersonalizeResult)
@@ -122,8 +135,18 @@ async def campaign_recipients_route(
     _user_id: UserIdDep,
     page: int = 1,
     limit: int = DEFAULT_PAGE_SIZE,
+    status: EmailLogStatus | None = None,
+    segment: RecipientSegment | None = None,
+    search: str | None = None,
 ) -> PaginatedResult[EmailLogDto]:
-    return await campaign_service.list_recipients(campaign_id, mongo_user_id, page, limit)
+    return await campaign_service.list_recipients(campaign_id, mongo_user_id, page, limit, status=status, segment=segment, search=search)
+
+
+@router.get("/{campaign_id}/recipients/{contact_id}/timeline", response_model=list[EmailEventDto])
+async def recipient_timeline_route(
+    campaign_id: PydanticObjectId, contact_id: PydanticObjectId, mongo_user_id: MongoUserIdDep, _user_id: UserIdDep
+) -> list[EmailEventDto]:
+    return await campaign_service.get_recipient_timeline(campaign_id, contact_id, mongo_user_id)
 
 
 @router.post("/{campaign_id}/recipients/{contact_id}/mark-replied")
@@ -132,6 +155,37 @@ async def mark_replied_route(
 ) -> dict[str, bool]:
     await campaign_service.mark_replied(campaign_id, contact_id, mongo_user_id)
     return {"marked": True}
+
+
+@router.get("/{campaign_id}/links", response_model=list[CampaignLinkDto])
+async def campaign_links_route(campaign_id: PydanticObjectId, mongo_user_id: MongoUserIdDep, _user_id: UserIdDep) -> list[CampaignLinkDto]:
+    return await campaign_service.get_campaign_links(campaign_id, mongo_user_id)
+
+
+@router.get("/{campaign_id}/engagement-timeseries", response_model=list[EngagementTimeseriesPoint])
+async def campaign_engagement_timeseries_route(
+    campaign_id: PydanticObjectId, mongo_user_id: MongoUserIdDep, _user_id: UserIdDep
+) -> list[EngagementTimeseriesPoint]:
+    return await campaign_service.get_engagement_timeseries(campaign_id, mongo_user_id)
+
+
+@router.get("/{campaign_id}/projects", response_model=list[ProjectEngagementDto])
+async def campaign_projects_route(campaign_id: PydanticObjectId, mongo_user_id: MongoUserIdDep, _user_id: UserIdDep) -> list[ProjectEngagementDto]:
+    return await campaign_service.get_top_projects(campaign_id, mongo_user_id)
+
+
+@router.get("/{campaign_id}/insight-cards", response_model=list[InsightActionCardDto])
+async def campaign_insight_cards_route(
+    campaign_id: PydanticObjectId, mongo_user_id: MongoUserIdDep, _user_id: UserIdDep
+) -> list[InsightActionCardDto]:
+    return await campaign_service.get_insight_action_cards(campaign_id, mongo_user_id)
+
+
+@router.post("/{campaign_id}/generate-follow-up", response_model=AiEmailGenerationResult)
+async def campaign_generate_follow_up_route(
+    campaign_id: PydanticObjectId, settings: SettingsDep, mongo_user_id: MongoUserIdDep, _user_id: UserIdDep
+) -> AiEmailGenerationResult:
+    return await campaign_service.generate_follow_up_draft(settings, campaign_id, mongo_user_id)
 
 
 @router.get("/{campaign_id}", response_model=CampaignDto)
