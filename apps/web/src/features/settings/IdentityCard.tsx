@@ -66,6 +66,16 @@ const THEME_CLASSES: Record<CardTheme, { card: string; name: string; headline: s
     chip: "border-white/10 bg-white/[0.06] text-ink-100",
     avatarRing: "ring-white/15",
   },
+  // Same as above — Modern is its own component (ModernIdentityCard). This
+  // entry only exists so THEME_CLASSES satisfies Record<CardTheme, ...>.
+  modern: {
+    card: "border border-[rgba(0,174,239,0.4)] bg-[#050A0E]",
+    name: "text-white",
+    headline: "text-[#00AEEF]",
+    bio: "text-ink-300",
+    chip: "border-[rgba(0,174,239,0.18)] bg-[rgba(0,174,239,0.06)] text-[rgba(65,200,250,0.8)]",
+    avatarRing: "ring-[#00AEEF]",
+  },
 };
 
 export const IdentityCard = forwardRef<HTMLDivElement, { profile: IdentityCardProfile; theme: CardTheme; className?: string }>(

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, Loader2, Plus, Sparkles, X } from "lucide-react";
 import type { SocialLinkKey, User } from "@believe-ai/shared";
 import { Modal } from "../../components/ui/Modal.js";
@@ -8,8 +8,10 @@ import { Input } from "../../components/ui/Input.js";
 import { Textarea } from "../../components/ui/Textarea.js";
 import { apiClient } from "../../lib/apiClient.js";
 import { checkUsernameAvailable, generateProfileSummary } from "../settings/profileApi.js";
+import { fetchSkills } from "./api/skillsApi.js";
 import { IdentityCard } from "../settings/IdentityCard.js";
 import { HolographicIdentityCard } from "../settings/HolographicIdentityCard.js";
+import { ModernIdentityCard } from "../settings/ModernIdentityCard.js";
 
 const CORE_SOCIAL_KEYS: SocialLinkKey[] = ["linkedin", "github", "leetcode"];
 const EXTRA_SOCIAL_KEYS: SocialLinkKey[] = ["portfolio", "twitter", "kaggle", "medium"];
@@ -43,6 +45,9 @@ export function EditProfileDrawer({ open, user, onClose }: { open: boolean; user
   const [form, setForm] = useState<FormState>(emptyForm());
   const [visibleLinkKeys, setVisibleLinkKeys] = useState<SocialLinkKey[]>(CORE_SOCIAL_KEYS);
   const [usernameStatus, setUsernameStatus] = useState<UsernameStatus>("idle");
+  // Only the Modern preview needs this — fetched whenever the drawer is open
+  // so switching to Modern doesn't show a loading flash in the live preview.
+  const { data: skills } = useQuery({ queryKey: ["skills"], queryFn: fetchSkills, enabled: open });
 
   useEffect(() => {
     if (user && open) {
@@ -136,6 +141,9 @@ export function EditProfileDrawer({ open, user, onClose }: { open: boolean; user
     headline: form.headline || null,
     bio: form.bio || null,
     socialLinks: form.socialLinks,
+    company: user?.company ?? null,
+    location: form.location || null,
+    skills: (skills ?? []).filter((s) => s.featured).map((s) => s.name),
   };
   const cardTheme = user?.cardTheme ?? "minimal";
 
@@ -161,6 +169,8 @@ export function EditProfileDrawer({ open, user, onClose }: { open: boolean; user
           <div className="flex justify-center rounded-panel bg-surface-2 p-4">
             {cardTheme === "holographic" ? (
               <HolographicIdentityCard profile={previewProfile} className="max-w-full scale-[0.85]" />
+            ) : cardTheme === "modern" ? (
+              <ModernIdentityCard profile={previewProfile} className="max-w-full scale-[0.85]" />
             ) : (
               <IdentityCard profile={previewProfile} theme={cardTheme} className="max-w-full" />
             )}

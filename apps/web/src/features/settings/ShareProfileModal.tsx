@@ -6,6 +6,7 @@ import type { CardTheme } from "@believe-ai/shared";
 import { Button } from "../../components/ui/Button.js";
 import { IdentityCard, type IdentityCardProfile } from "./IdentityCard.js";
 import { HolographicIdentityCard } from "./HolographicIdentityCard.js";
+import { ModernIdentityCard } from "./ModernIdentityCard.js";
 
 export function ShareProfileModal({
   profile,
@@ -13,7 +14,7 @@ export function ShareProfileModal({
   username,
   onClose,
 }: {
-  profile: IdentityCardProfile;
+  profile: IdentityCardProfile & { company: string | null; location: string | null; skills: string[] };
   theme: CardTheme;
   username: string;
   onClose: () => void;
@@ -87,6 +88,8 @@ export function ShareProfileModal({
         <div className="flex justify-center">
           {theme === "holographic" ? (
             <HolographicIdentityCard ref={cardRef} profile={profile} />
+          ) : theme === "modern" ? (
+            <ModernIdentityCard ref={cardRef} profile={profile} />
           ) : (
             <IdentityCard ref={cardRef} profile={profile} theme={theme} />
           )}

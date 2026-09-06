@@ -5,7 +5,7 @@ import type { PlanTier } from "../constants/plans.js";
  */
 export type UserRole = "user" | "admin" | "recruiter";
 
-export type CardTheme = "minimal" | "aurora" | "midnight" | "holographic";
+export type CardTheme = "minimal" | "aurora" | "midnight" | "holographic" | "modern";
 
 /** Keys allowed on socialLinks — a closed set so a public profile's link
  * block always renders a known, styled icon. */
@@ -55,9 +55,11 @@ export interface UpdateProfileInput {
   cardTheme?: CardTheme;
 }
 
-/** believe.ai/u/<username> — deliberately excludes email/plan/role/company/
- * jobTitle/onboardingCompleted, none of which belong on a page anyone on
- * the internet can load. */
+/** believe.ai/u/<username> — deliberately excludes email/plan/role/jobTitle/
+ * onboardingCompleted, none of which belong on a page anyone on the internet
+ * can load. `company` is a deliberate exception (sharing where you work is
+ * exactly what a public developer identity card is for) and `skills` mirrors
+ * only the user's own featured/Top Skills, never a fabricated stat. */
 export interface PublicProfile {
   username: string;
   name: string;
@@ -65,6 +67,8 @@ export interface PublicProfile {
   headline: string | null;
   bio: string | null;
   location: string | null;
+  company: string | null;
   socialLinks: Partial<Record<SocialLinkKey, string>>;
+  skills: string[];
   cardTheme: CardTheme;
 }

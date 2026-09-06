@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Camera, ExternalLink, Github, Globe, Linkedin, MapPin, Pencil, Share2 } from "lucide-react";
 import { Link } from "react-router-dom";
 import type { SocialLinkKey, User } from "@believe-ai/shared";
@@ -8,6 +8,7 @@ import { toast } from "../../components/ui/Toast.js";
 import { resolveProfileImageUrl } from "../../lib/profileImage.js";
 import { cn } from "../../lib/cn.js";
 import { uploadAvatar, uploadCoverImage } from "./api/profileImageApi.js";
+import { fetchSkills } from "./api/skillsApi.js";
 import { EditProfileDrawer } from "./EditProfileDrawer.js";
 import { ShareProfileModal } from "../settings/ShareProfileModal.js";
 
@@ -28,6 +29,9 @@ export function ProfileHero({ user }: { user: User | undefined }) {
   const [shareOpen, setShareOpen] = useState(false);
   const avatarInputRef = useRef<HTMLInputElement>(null);
   const coverInputRef = useRef<HTMLInputElement>(null);
+  // Only the Modern card needs this — fetched here so the share modal has it
+  // ready the moment it opens rather than showing a loading flash.
+  const { data: skills } = useQuery({ queryKey: ["skills"], queryFn: fetchSkills });
 
   function invalidate() {
     void queryClient.invalidateQueries({ queryKey: ["auth", "me"] });
@@ -182,7 +186,16 @@ export function ProfileHero({ user }: { user: User | undefined }) {
 
       {shareOpen && user.username && (
         <ShareProfileModal
-          profile={{ name: user.name, avatar: user.avatar, headline: user.headline, bio: user.bio, socialLinks: user.socialLinks }}
+          profile={{
+            name: user.name,
+            avatar: user.avatar,
+            headline: user.headline,
+            bio: user.bio,
+            socialLinks: user.socialLinks,
+            company: user.company,
+            location: user.location,
+            skills: (skills ?? []).filter((s) => s.featured).map((s) => s.name),
+          }}
           theme={user.cardTheme}
           username={user.username}
           onClose={() => setShareOpen(false)}

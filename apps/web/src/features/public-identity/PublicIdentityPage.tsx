@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Github, Globe, Linkedin, Twitter } from "lucide-react";
 import type { SocialLinkKey } from "@believe-ai/shared";
 import { IdentityCard } from "../settings/IdentityCard.js";
+import { ModernIdentityCard } from "../settings/ModernIdentityCard.js";
 import { fetchPublicProfile } from "./publicIdentityApi.js";
 import { GalaxyLoadingState, ProfileNotAvailable } from "./three-d/overlay/ProfileNotAvailable.js";
 
@@ -43,6 +44,26 @@ export function PublicIdentityPage() {
       <Suspense fallback={<GalaxyLoadingState />}>
         <ThreeDPublicProfile profile={profile} />
       </Suspense>
+    );
+  }
+
+  if (profile.cardTheme === "modern") {
+    return (
+      <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-[#05090D] px-4 py-16">
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_65%_25%,rgba(0,174,239,0.07),transparent_35%),radial-gradient(circle_at_20%_75%,rgba(0,174,239,0.035),transparent_40%)]"
+        />
+        <div className="relative flex flex-col items-center gap-6">
+          <ModernIdentityCard profile={profile} />
+          <Link
+            to="/signup"
+            className="mt-2 inline-flex items-center gap-1.5 rounded-pill bg-gradient-to-b from-brand-500 to-brand-600 px-5 py-2.5 text-sm font-semibold text-white shadow-[0_4px_12px_-2px_rgba(67,83,255,0.45)] transition-all duration-150 hover:scale-[1.02]"
+          >
+            Get your own believe.ai identity
+          </Link>
+        </div>
+      </div>
     );
   }
 

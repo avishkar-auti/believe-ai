@@ -13,7 +13,7 @@ from pymongo import IndexModel
 
 UserRole = Literal["user", "admin", "recruiter"]
 PlanTier = Literal["FREE", "PRO", "BUSINESS", "ENTERPRISE"]
-CardTheme = Literal["minimal", "aurora", "midnight", "holographic"]
+CardTheme = Literal["minimal", "aurora", "midnight", "holographic", "modern"]
 
 
 class User(Document):

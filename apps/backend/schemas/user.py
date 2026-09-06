@@ -118,8 +118,11 @@ class UsernameAvailableResult(BaseModel):
 
 class PublicProfileDto(BaseModel):
     """The public-facing shape of a user's identity — deliberately excludes
-    email/plan/role/company/jobTitle/onboardingCompleted, none of which
-    belong on a page anyone on the internet can load."""
+    email/plan/role/jobTitle/onboardingCompleted, none of which belong on a
+    page anyone on the internet can load. `company` is a deliberate
+    exception (unlike the others, sharing where you work is exactly what a
+    public developer identity card is for) and `skills` mirrors only the
+    user's own featured/Top Skills, never a fabricated stat."""
 
     username: str
     name: str
@@ -128,5 +131,7 @@ class PublicProfileDto(BaseModel):
     bio: str | None
     about: str | None
     location: str | None
+    company: str | None
     socialLinks: dict[str, str]
+    skills: list[str]
     cardTheme: CardTheme
