@@ -1,0 +1,82 @@
+name: Process email queue
+
+# Render's free plan has no background-worker tier — only Web, Static,
+# Postgres, and Key Value are free-eligible (confirmed against Render's
+# docs; a real Apply attempt failed trying to create a free worker). This
+# workflow is the zero-additional-signup alternative: it reuses the same
+# GitHub account and the same Render Key Value instance already in place,
+# rather than a second paid service or a second free-tier account.
+#
+# arq's own `--burst` flag (drain whatever's due, then exit — see
+# apps/backend's `python -m arq --help`) is what makes this work as a
+# scheduled run instead of a long-lived process: each run is a normal
+# checkout + pip install + one short-lived worker invocation, not a
+# process trying to stay alive inside a runner GitHub will kill anyway.
+#
+# What this trades away versus a real always-on worker:
+#   - Latency: a job becomes due to send only as fast as the next
+#     schedule tick finds it — up to ~CRON_MINUTES late, on top of the
+#     app's own intentional send-pacing/jitter. Fine for outreach email,
+#     not fine for anything time-sensitive.
+#   - GitHub disables a schedule trigger automatically after 60 days with
+#     no commits to the repo — an idle repo silently stops sending. A
+#     commit (even a trivial one) resets that clock.
+#   - Actions minutes: a private repo gets 2,000 free minutes/month:
+#     roughly 60-120s per run with pip's cache warm. At the 10-minute
+#     cadence below that's ~4,000-8,000 runs/month's worth of minutes if
+#     every run did a cold install — the pip cache keyed on
+#     requirements.txt is what keeps this affordable; don't drop it.
+#
+# Setup this file can't do for you — add each of these once, as Actions
+# secrets (Settings → Secrets and variables → Actions → New repository
+# secret), same values as apps/backend/.env: MONGODB_URI, REDIS_URL (the
+# Render Key Value instance's *external* connection string — this runs
+# outside Render's private network, so the internal one won't resolve),
+# ENCRYPTION_KEY, GEMINI_API_KEY, GROQ_API_KEY, FIREBASE_PROJECT_ID,
+# FIREBASE_CLIENT_EMAIL, FIREBASE_PRIVATE_KEY, APP_BASE_URL (the deployed
+# backend's Render URL, for building tracking links).
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch: {} # lets you trigger a run by hand from the Actions tab, for testing
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false # never cancel a run mid-send; let it finish and drop the next tick instead
+
+jobs:
+  drain-queue:
+    name: Drain due jobs
+    runs-on: ubuntu-latest
+    timeout-minutes: 8 # safety cutoff — a healthy burst run finishes in well under a minute
+    defaults:
+      run:
+        working-directory: apps/backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: apps/backend/requirements.txt
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run arq in burst mode
+        run: python -m arq worker.settings.WorkerSettings --burst
+        env:
+          MONGODB_URI: ${{ secrets.MONGODB_URI }}
+          REDIS_URL: ${{ secrets.REDIS_URL }}
+          ENCRYPTION_KEY: ${{ secrets.ENCRYPTION_KEY }}
+          APP_BASE_URL: ${{ secrets.APP_BASE_URL }}
+          AI_PROVIDER_ORDER: gemini,groq
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GEMINI_MODEL: gemini-flash-latest
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          GROQ_MODEL: llama-3.3-70b-versatile
+          FIREBASE_PROJECT_ID: ${{ secrets.FIREBASE_PROJECT_ID }}
+          FIREBASE_CLIENT_EMAIL: ${{ secrets.FIREBASE_CLIENT_EMAIL }}
+          FIREBASE_PRIVATE_KEY: ${{ secrets.FIREBASE_PRIVATE_KEY }}

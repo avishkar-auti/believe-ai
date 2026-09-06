@@ -1,5 +1,16 @@
-# Render Blueprint — deploys the whole app in one "New Blueprint" pass.
-# https://render.com/docs/blueprint-spec
+# Render Blueprint — deploys the backend and frontend in one "New Blueprint"
+# pass. https://render.com/docs/blueprint-spec
+#
+# The arq background worker — the process that actually sends campaign
+# emails and follow-ups — is deliberately NOT here. Render's free plan has
+# no background-worker tier (confirmed against Render's docs; a real
+# Apply attempt failed trying to create one on `plan: free`), and a paid
+# plan is a real cost decision for you to make, not one to default into
+# silently. .github/workflows/worker.yml runs the same worker code for
+# free instead, via arq's own `--burst` mode (drain what's due, then
+# exit) on a GitHub Actions schedule — see that file for the setup steps
+# and the latency/reliability trade-offs that come with polling instead
+# of an always-on process.
 #
 # What this does NOT do, and why:
 #   - Provision MongoDB. Render has no managed MongoDB; MONGODB_URI must
@@ -11,10 +22,10 @@
 #     first "Apply", and they're never in git.
 #
 # One-time setup this file can't do for you:
-#   1. New Blueprint → connect this repo → Apply. Render creates the three
+#   1. New Blueprint → connect this repo → Apply. Render creates the two
 #      app services and the Key Value (Redis-compatible) instance below,
-#      all failing to boot until (2).
-#   2. Each backend service → Environment tab → fill in every `sync: false`
+#      both failing to boot until (2).
+#   2. believe-ai-backend → Environment tab → fill in every `sync: false`
 #      var (values come from apps/backend/.env — never commit that file).
 #   3. web (the frontend)'s VITE_API_BASE_URL should be the backend's
 #      Render URL (shown on the backend service's page) plus no trailing
@@ -24,7 +35,12 @@
 #      know it; APP_BASE_URL should be the backend's OWN Render URL (it
 #      builds the {app_base_url}/t/open/... tracking-pixel and click links
 #      in outbound campaign emails — see worker/jobs/send_campaign_email.py).
-#      Redeploy the backend and worker after setting either.
+#      Redeploy the backend after setting either.
+#   5. believe-ai-redis's page → Connect tab → copy the EXTERNAL connection
+#      string (not the internal one the backend uses via fromService below)
+#      into the worker.yml GitHub Actions secret named REDIS_URL — GitHub's
+#      runners aren't on Render's private network, so the internal URL
+#      won't resolve for them.
 #
 #   Known pre-existing gap, not introduced by this file: api/routes/
 #   integrations.py also reads APP_BASE_URL, but to redirect the browser
@@ -38,10 +54,10 @@
 #   config): add a separate FRONTEND_URL setting and point
 #   integrations.py at that instead.
 #
-# Plan note: `free` is a real plan name for every service type below
-# (web, worker, and keyvalue all have one), confirmed against Render's
-# current docs. Nothing here purchases anything on its own, and I won't
-# select a paid plan without asking you first.
+# Plan note: `free` is a real plan name for web and keyvalue (confirmed
+# against Render's docs — it is NOT valid for `type: worker`, which is why
+# there's no worker service here at all). Nothing here purchases anything
+# on its own, and I won't select a paid plan without asking you first.
 
 services:
   # FastAPI app — every HTTP route.
@@ -77,49 +93,6 @@ services:
         value: gemini-flash-latest
       - key: GEMINI_EMBEDDING_MODEL
         value: gemini-embedding-001
-      - key: GROQ_API_KEY
-        sync: false
-      - key: GROQ_MODEL
-        value: llama-3.3-70b-versatile
-      - key: FIREBASE_PROJECT_ID
-        sync: false
-      - key: FIREBASE_CLIENT_EMAIL
-        sync: false
-      - key: FIREBASE_PRIVATE_KEY
-        sync: false
-
-  # Same codebase, same env, different process — the arq queue consumer
-  # that actually sends campaign emails and follow-ups. Without this
-  # running as its own service, jobs enqueue and never fire (see
-  # apps/backend/README.md's "Run the background worker in a separate
-  # process" note).
-  - type: worker
-    name: believe-ai-worker
-    runtime: python
-    plan: free
-    rootDir: apps/backend
-    buildCommand: pip install -r requirements.txt
-    startCommand: arq worker.settings.WorkerSettings
-    envVars:
-      - key: PYTHON_VERSION
-        value: 3.12.1
-      - key: MONGODB_URI
-        sync: false
-      - key: REDIS_URL
-        fromService:
-          type: keyvalue
-          name: believe-ai-redis
-          property: connectionString
-      - key: ENCRYPTION_KEY
-        sync: false
-      - key: APP_BASE_URL
-        sync: false
-      - key: AI_PROVIDER_ORDER
-        value: gemini,groq
-      - key: GEMINI_API_KEY
-        sync: false
-      - key: GEMINI_MODEL
-        value: gemini-flash-latest
       - key: GROQ_API_KEY
         sync: false
       - key: GROQ_MODEL
@@ -168,12 +141,20 @@ services:
       - key: VITE_FIREBASE_APP_ID
         sync: false
 
-  # Render's managed Redis-compatible store — backs both the API and the
-  # worker's arq queue. `type: keyvalue` is the current name for what the
-  # dashboard still shows as "Redis"; an empty ipAllowList blocks all
-  # public internet access while still allowing the two services above to
-  # reach it over Render's private network.
+  # Render's managed Redis-compatible store — backs the API's own use of
+  # Redis and, externally, the GitHub Actions worker's arq queue (see
+  # worker.yml). `type: keyvalue` is the current name for what the
+  # dashboard still shows as "Redis".
+  #
+  # ipAllowList is 0.0.0.0/0 (allow all external), not empty: the GitHub
+  # Actions worker connects from outside Render's network on runners with
+  # no fixed IP range, so an empty list (block all external) would lock
+  # it out entirely along with everyone else. The connection string's own
+  # embedded credential is the real access control here, the same trust
+  # model as pointing MONGODB_URI at an Atlas cluster opened to 0.0.0.0/0.
   - type: keyvalue
     name: believe-ai-redis
     plan: free
-    ipAllowList: []
+    ipAllowList:
+      - source: 0.0.0.0/0
+        description: needed for the external GitHub Actions worker (see worker.yml); the connectionString's credential is the actual access control
