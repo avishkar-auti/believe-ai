@@ -1,13 +1,6 @@
 # Render Blueprint — deploys the whole app in one "New Blueprint" pass.
 # https://render.com/docs/blueprint-spec
 #
-# Written against the `runtime:` field name (python/static/node, replacing
-# the older `env:` key in Render's spec) — I can't confirm this is still
-# current from here. If "Apply" rejects a service with an unrecognized-field
-# error, that's almost certainly this: swap `runtime:` for `env:` on the
-# service(s) it names and re-apply. Everything else in this file is
-# independent of that naming.
-#
 # What this does NOT do, and why:
 #   - Provision MongoDB. Render has no managed MongoDB; MONGODB_URI must
 #     point at an external cluster (MongoDB Atlas's free tier is the usual
@@ -19,7 +12,8 @@
 #
 # One-time setup this file can't do for you:
 #   1. New Blueprint → connect this repo → Apply. Render creates the three
-#      services and the Redis instance below, all failing to boot until (2).
+#      app services and the Key Value (Redis-compatible) instance below,
+#      all failing to boot until (2).
 #   2. Each backend service → Environment tab → fill in every `sync: false`
 #      var (values come from apps/backend/.env — never commit that file).
 #   3. web (the frontend)'s VITE_API_BASE_URL should be the backend's
@@ -44,12 +38,10 @@
 #   config): add a separate FRONTEND_URL setting and point
 #   integrations.py at that instead.
 #
-# Plan note: every `plan: free` below is a starting point, not a promise —
-# Render's free-tier availability for background workers and Redis has
-# changed over time and I can't confirm current pricing from here. Render
-# will tell you plainly at "Apply" time if a plan needs upgrading; nothing
-# here purchases anything on its own, and I won't select a paid plan
-# without asking you first.
+# Plan note: `free` is a real plan name for every service type below
+# (web, worker, and keyvalue all have one), confirmed against Render's
+# current docs. Nothing here purchases anything on its own, and I won't
+# select a paid plan without asking you first.
 
 services:
   # FastAPI app — every HTTP route.
@@ -70,7 +62,7 @@ services:
         sync: false # external MongoDB Atlas connection string — Render doesn't host Mongo
       - key: REDIS_URL
         fromService:
-          type: redis
+          type: keyvalue
           name: believe-ai-redis
           property: connectionString
       - key: ENCRYPTION_KEY
@@ -115,7 +107,7 @@ services:
         sync: false
       - key: REDIS_URL
         fromService:
-          type: redis
+          type: keyvalue
           name: believe-ai-redis
           property: connectionString
       - key: ENCRYPTION_KEY
@@ -165,8 +157,12 @@ services:
       - key: VITE_FIREBASE_APP_ID
         sync: false
 
-# Render's managed Redis — backs both the API and the worker's arq queue.
-redis:
-  - name: believe-ai-redis
+  # Render's managed Redis-compatible store — backs both the API and the
+  # worker's arq queue. `type: keyvalue` is the current name for what the
+  # dashboard still shows as "Redis"; an empty ipAllowList blocks all
+  # public internet access while still allowing the two services above to
+  # reach it over Render's private network.
+  - type: keyvalue
+    name: believe-ai-redis
     plan: free
-    ipAllowList: [] # only reachable from services in this same Render project
+    ipAllowList: []
