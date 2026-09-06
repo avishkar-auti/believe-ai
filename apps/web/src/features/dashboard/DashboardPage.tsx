@@ -16,6 +16,8 @@ import { CAMPAIGN_STATUS_TONE } from "../campaigns/statusTone.js";
 import { RecentActivityCard } from "../audit/RecentActivityCard.js";
 import { useCountUp } from "../../hooks/useCountUp.js";
 import { cn } from "../../lib/cn.js";
+import { useTheme } from "../../app/providers/ThemeProvider.js";
+import { ModernDashboard, ModernDashboardSkeleton } from "./ModernDashboard.js";
 
 const STAT_CARDS: { key: "totalContacts" | "emailsSent" | "activeCampaigns" | "scheduledCampaigns"; label: string; icon: typeof Users }[] = [
   { key: "totalContacts", label: "Total contacts", icon: Users },
@@ -36,8 +38,16 @@ const cardVariants = {
 };
 
 export function DashboardPage() {
+  const { experience } = useTheme();
   const { data, isLoading } = useQuery({ queryKey: ["dashboard"], queryFn: fetchDashboard });
   const [range, setRange] = useState<DateRange>(() => defaultWeekRange(new Date()));
+
+  // Modern isn't a restyle of this page — it's a different composition of
+  // the same data, so it gets its own component rather than a pile of
+  // conditional classNames threaded through the classic one.
+  if (experience === "modern") {
+    return isLoading && !data ? <ModernDashboardSkeleton /> : <ModernDashboard />;
+  }
 
   if (isLoading || !data) {
     return <DashboardSkeleton />;

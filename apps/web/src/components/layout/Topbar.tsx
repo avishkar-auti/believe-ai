@@ -7,7 +7,7 @@ import { useCurrentUser } from "../../hooks/useCurrentUser.js";
 import { NotificationBell } from "../../features/notifications/NotificationBell.js";
 import { OPEN_COMMAND_PALETTE_EVENT } from "../../features/search/CommandPalette.js";
 import { resolveProfileImageUrl } from "../../lib/profileImage.js";
-import { ThemeToggle } from "./ThemeToggle.js";
+import { AppearanceToggle } from "./AppearanceToggle.js";
 import { Menu } from "../ui/Menu.js";
 import { cn } from "../../lib/cn.js";
 
@@ -73,7 +73,7 @@ export function Topbar({ onOpenMenu }: { onOpenMenu?: () => void }) {
         >
           <Waves className="h-4 w-4" />
         </button>
-        <ThemeToggle />
+        <AppearanceToggle />
         <NotificationBell />
         {user && (
           <Menu

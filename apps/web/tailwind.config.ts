@@ -12,38 +12,43 @@ export default {
   theme: {
     extend: {
       colors: {
-        // The canvas the white page-cards sit on — neutral grey, no blue tint.
+        // canvas/ink/brand are CSS-variable-backed for the same reason the
+        // semantic tokens below are: roughly half the app still styles with
+        // these ramps directly, and a static hex scale can't respond to the
+        // Modern experience. Their :root values in index.css are the exact
+        // hexes they always were, so the classic look is unchanged — Modern
+        // just re-points the same ramps at its own palette.
         canvas: {
-          DEFAULT: "#F1F1F3",
-          soft: "#F6F6F8",
-          deep: "#E4E4E8",
+          DEFAULT: "rgb(var(--canvas) / <alpha-value>)",
+          soft: "rgb(var(--canvas-soft) / <alpha-value>)",
+          deep: "rgb(var(--canvas-deep) / <alpha-value>)",
         },
         // Near-black through to off-white. `ink-900` is the headline colour.
         ink: {
-          50: "#F7F8FA",
-          100: "#EFF1F4",
-          200: "#E1E4EA",
-          300: "#C7CCD6",
-          400: "#98A0AE",
-          500: "#6B7280",
-          600: "#4B5160",
-          700: "#333846",
-          800: "#141414",
-          900: "#000000",
+          50: "rgb(var(--ink-50) / <alpha-value>)",
+          100: "rgb(var(--ink-100) / <alpha-value>)",
+          200: "rgb(var(--ink-200) / <alpha-value>)",
+          300: "rgb(var(--ink-300) / <alpha-value>)",
+          400: "rgb(var(--ink-400) / <alpha-value>)",
+          500: "rgb(var(--ink-500) / <alpha-value>)",
+          600: "rgb(var(--ink-600) / <alpha-value>)",
+          700: "rgb(var(--ink-700) / <alpha-value>)",
+          800: "rgb(var(--ink-800) / <alpha-value>)",
+          900: "rgb(var(--ink-900) / <alpha-value>)",
         },
         // Kept in sync with --accent in index.css so pages not yet migrated
         // to the semantic tokens still land on the same violet identity.
         brand: {
-          50: "#F5F3FF",
-          100: "#EDE9FE",
-          200: "#DDD6FE",
-          300: "#C4B5FD",
-          400: "#A78BFA",
-          500: "#8B5CF6",
-          600: "#7C3AED",
-          700: "#6D28D9",
-          800: "#5B21B6",
-          900: "#4C1D95",
+          50: "rgb(var(--brand-50) / <alpha-value>)",
+          100: "rgb(var(--brand-100) / <alpha-value>)",
+          200: "rgb(var(--brand-200) / <alpha-value>)",
+          300: "rgb(var(--brand-300) / <alpha-value>)",
+          400: "rgb(var(--brand-400) / <alpha-value>)",
+          500: "rgb(var(--brand-500) / <alpha-value>)",
+          600: "rgb(var(--brand-600) / <alpha-value>)",
+          700: "rgb(var(--brand-700) / <alpha-value>)",
+          800: "rgb(var(--brand-800) / <alpha-value>)",
+          900: "rgb(var(--brand-900) / <alpha-value>)",
         },
         // Data-viz / status accents used sparingly on cards and charts.
         lime: { 400: "#A3D34D", 500: "#8BC34A", 600: "#6FA032" },

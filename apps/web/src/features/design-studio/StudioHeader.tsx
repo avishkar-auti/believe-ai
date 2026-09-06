@@ -1,7 +1,7 @@
 import { Link, useNavigate } from "react-router-dom";
 import { ArrowLeft, HelpCircle, LogOut, Search, Settings, Sparkles, User as UserIcon } from "lucide-react";
 import { useAuth } from "../../app/providers/AuthProvider.js";
-import { ThemeToggle } from "../../components/layout/ThemeToggle.js";
+import { AppearanceToggle } from "../../components/layout/AppearanceToggle.js";
 import { Badge } from "../../components/ui/Badge.js";
 import { Menu } from "../../components/ui/Menu.js";
 import { useCurrentUser } from "../../hooks/useCurrentUser.js";
@@ -61,7 +61,7 @@ export function StudioHeader({ onOpenSearch }: { onOpenSearch: () => void }) {
         >
           <HelpCircle className="h-4 w-4" />
         </Link>
-        <ThemeToggle />
+        <AppearanceToggle />
         {user && (
           <Menu
             trigger={

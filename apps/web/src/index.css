@@ -48,6 +48,37 @@
     --liquid-blur-sm: 8px;
     --liquid-blur-md: 16px;
     --liquid-blur-lg: 24px;
+
+    /* The canvas/ink/brand ramps. These were static hexes in the Tailwind
+       config until roughly half the app turned out to still style with them
+       directly — a static scale can't follow the Modern experience, so they
+       moved here. These values are the original hexes exactly, so nothing
+       about the classic appearance changes. */
+    --canvas: 241 241 243;
+    --canvas-soft: 246 246 248;
+    --canvas-deep: 228 228 232;
+
+    --ink-50: 247 248 250;
+    --ink-100: 239 241 244;
+    --ink-200: 225 228 234;
+    --ink-300: 199 204 214;
+    --ink-400: 152 160 174;
+    --ink-500: 107 114 128;
+    --ink-600: 75 81 96;
+    --ink-700: 51 56 70;
+    --ink-800: 20 20 20;
+    --ink-900: 0 0 0;
+
+    --brand-50: 245 243 255;
+    --brand-100: 237 233 254;
+    --brand-200: 221 214 254;
+    --brand-300: 196 181 253;
+    --brand-400: 167 139 250;
+    --brand-500: 139 92 246;
+    --brand-600: 124 58 237;
+    --brand-700: 109 40 217;
+    --brand-800: 91 33 182;
+    --brand-900: 76 29 149;
   }
 
   /* Auth screens are light-only by design (brief-mandated), regardless of
@@ -99,6 +130,184 @@
     --surface-3: 43 38 58;
     --surface-4: 54 48 72;
     --ambient-opacity: 1;
+  }
+
+  /* ---------------------------------------------------------------------
+     Modern experience
+     ---------------------------------------------------------------------
+     Modern re-declares the *same* semantic tokens rather than introducing a
+     parallel --modern-* set that components would have to opt into. That's
+     the whole trick: every existing `bg-surface` / `text-fg` / `border-line`
+     in the app resolves to Modern's palette the moment the attribute flips,
+     with no per-component overrides.
+
+     Translucent-looking surfaces are stored pre-blended over the Modern
+     background instead of as rgba, because the token contract here is an
+     RGB triplet consumed as rgb(var(--x) / <alpha>) — components rely on
+     these being opaque.
+
+     Specificity note: [data-experience][data-theme] (0,2,0) intentionally
+     outranks .dark (0,1,0), so the class stays on <html> for every existing
+     `dark:` utility while Modern still wins the token layer. */
+  [data-experience="modern"] {
+    /* One radius scale, so nothing reaches for an arbitrary 17px. */
+    --radius-xs: 8px;
+    --radius-sm: 12px;
+    --radius-md: 16px;
+    --radius-lg: 20px;
+    --radius-xl: 24px;
+    --radius-2xl: 30px;
+    --modern-surface-transition: 220ms cubic-bezier(0.16, 1, 0.3, 1);
+
+    /* Re-point the legacy ramps at Modern's palette. This is what brings the
+       ~160 files that still style with the ink and brand ramps directly into
+       the Modern look without touching any of them: same ordering (50
+       lightest to 900 darkest), cooler charcoal cast, Modern's purple. */
+    --ink-50: 246 247 249;
+    --ink-100: 236 238 242;
+    --ink-200: 221 224 230;
+    --ink-300: 194 198 207;
+    --ink-400: 138 141 150;
+    --ink-500: 106 109 118;
+    --ink-600: 74 77 85;
+    --ink-700: 46 48 56;
+    --ink-800: 29 31 38;
+    --ink-900: 12 14 20;
+
+    --brand-50: 242 240 255;
+    --brand-100: 228 224 255;
+    --brand-200: 201 193 255;
+    --brand-300: 169 156 255;
+    --brand-400: 133 116 255;
+    --brand-500: 112 92 255;
+    --brand-600: 91 73 232;
+    --brand-700: 74 58 199;
+    --brand-800: 58 46 158;
+    --brand-900: 42 33 117;
+
+    --canvas: 247 248 250;
+    --canvas-soft: 251 251 252;
+    --canvas-deep: 237 239 243;
+  }
+
+  [data-experience="modern"][data-theme="dark"] {
+    --fg: 245 246 248;
+    --fg-muted: 161 162 168;
+    --fg-subtle: 112 113 120;
+    --accent: 112 92 255;
+    --accent-soft: 23 21 49;
+    --accent-fg: 255 255 255;
+    --accent-hover: 133 116 255;
+    --positive: 53 208 127;
+    --critical: 248 113 113;
+    --caution: 255 157 61;
+    --informative: 56 189 248;
+    --line: 28 30 36;
+    --line-strong: 48 49 56;
+    --scrollbar-thumb-idle: 255 255 255;
+    --scrollbar-thumb-idle-alpha: 0.14;
+    --bg: 8 10 16;
+    --surface: 19 21 28;
+    --surface-2: 24 26 33;
+    --surface-3: 29 31 38;
+    --surface-4: 35 37 44;
+    --ambient-opacity: 1;
+  }
+
+  [data-experience="modern"][data-theme="light"] {
+    --fg: 16 18 27;
+    --fg-muted: 92 98 114;
+    --fg-subtle: 138 145 162;
+    --accent: 91 73 232;
+    --accent-soft: 237 235 253;
+    --accent-fg: 255 255 255;
+    --accent-hover: 76 60 205;
+    --positive: 22 148 91;
+    --critical: 220 38 38;
+    --caution: 202 118 20;
+    --informative: 14 133 199;
+    --line: 226 229 236;
+    --line-strong: 205 210 220;
+    --scrollbar-thumb-idle: 92 98 114;
+    --scrollbar-thumb-idle-alpha: 0.22;
+    --bg: 247 248 250;
+    --surface: 255 255 255;
+    --surface-2: 244 245 248;
+    --surface-3: 237 239 244;
+    --surface-4: 255 255 255;
+    --ambient-opacity: 0.5;
+  }
+
+  /* Named properties rather than `transition: all`, so switching schemes
+     eases the canvas without dragging every unrelated animation with it. */
+  html[data-experience="modern"],
+  html[data-experience="modern"] body {
+    transition:
+      background-color 420ms cubic-bezier(0.16, 1, 0.3, 1),
+      color 300ms ease;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    html[data-experience="modern"],
+    html[data-experience="modern"] body {
+      transition: none;
+    }
+  }
+
+  /* ---------------------------------------------------------------------
+     Scrollbars
+     ---------------------------------------------------------------------
+     There are ~54 scrollable regions in the app and only the sidebar was
+     ever styled, so everything else fell back to the OS default — a heavy
+     grey trough with stepper arrows that reads as unfinished next to the
+     rest of the UI, and especially wrong on a dark canvas.
+
+     Styled globally rather than per-component for the same reason the
+     colour ramps are token-driven: 54 call sites shouldn't each have to
+     remember a class. Colours come from the existing
+     --scrollbar-thumb-idle tokens, so this follows light/dark/Modern
+     automatically.
+
+     The transparent border + background-clip is what turns the thumb into a
+     floating pill with breathing room, instead of a bar that fills the
+     gutter edge to edge. */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: rgb(var(--scrollbar-thumb-idle) / var(--scrollbar-thumb-idle-alpha)) transparent;
+  }
+
+  *::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+
+  *::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  *::-webkit-scrollbar-thumb {
+    background: rgb(var(--scrollbar-thumb-idle) / var(--scrollbar-thumb-idle-alpha));
+    border-radius: 999px;
+    border: 2px solid transparent;
+    background-clip: content-box;
+    transition: background-color 180ms ease;
+  }
+
+  *::-webkit-scrollbar-thumb:hover {
+    background: rgb(var(--scrollbar-thumb-idle) / calc(var(--scrollbar-thumb-idle-alpha) * 2));
+    background-clip: content-box;
+  }
+
+  /* The stepper arrows are the single worst offender — they can't be styled
+     to match anything, so they go. */
+  *::-webkit-scrollbar-button {
+    display: none;
+    width: 0;
+    height: 0;
+  }
+
+  *::-webkit-scrollbar-corner {
+    background: transparent;
   }
 
   html {
@@ -184,36 +393,18 @@
      hover brings it up to the real accent color. Firefox has no equivalent
      of ::-webkit-scrollbar-button, so there's nothing to hide there; it
      simply never draws native arrow buttons under scrollbar-width: thin. */
-  .sidebar-scroll {
-    scrollbar-width: thin;
-    scrollbar-color: rgb(var(--scrollbar-thumb-idle) / var(--scrollbar-thumb-idle-alpha)) transparent;
-  }
   .sidebar-scroll::-webkit-scrollbar {
     width: 3px;
   }
   .sidebar-scroll:hover::-webkit-scrollbar {
     width: 4px;
   }
-  .sidebar-scroll::-webkit-scrollbar-track {
-    background: transparent;
-  }
   .sidebar-scroll::-webkit-scrollbar-thumb {
-    background: rgb(var(--scrollbar-thumb-idle) / var(--scrollbar-thumb-idle-alpha));
-    border-radius: 999px;
     border: none;
-    transition: background-color 180ms ease;
   }
   .sidebar-scroll:hover::-webkit-scrollbar-thumb,
   .sidebar-scroll:focus-within::-webkit-scrollbar-thumb {
     background: rgb(var(--accent) / 0.42);
-  }
-  .sidebar-scroll::-webkit-scrollbar-button {
-    display: none;
-    width: 0;
-    height: 0;
-  }
-  .sidebar-scroll::-webkit-scrollbar-corner {
-    background: transparent;
   }
 }
 

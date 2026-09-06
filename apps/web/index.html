@@ -10,20 +10,29 @@
     <title>believe.ai — Believe in your next opportunity</title>
     <meta name="description" content="AI-powered outreach and communication platform." />
     <script>
-      // Applies the stored theme before first paint. Without this, React
+      // Applies the stored appearance before first paint. Without this, React
       // mounts after the browser has already painted a light page, so a
-      // dark-mode user sees a white flash on every load.
+      // dark-mode user sees a white flash on every load — and a Modern user
+      // would additionally see the classic shell's palette flash first.
+      //
+      // Mirrors applyAppearance() in app/providers/ThemeProvider.tsx.
       (function () {
         try {
-          var stored = localStorage.getItem("believe-ai:theme");
-          var pref = stored === "light" || stored === "dark" || stored === "system" ? stored : "system";
+          var storedScheme = localStorage.getItem("believe-ai:theme");
+          // "system" is the retired third option — anyone still carrying it
+          // resolves against the OS once, same as the provider does.
           var dark =
-            pref === "dark" ||
-            (pref === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches);
-          document.documentElement.classList.toggle("dark", dark);
-          document.documentElement.style.colorScheme = dark ? "dark" : "light";
+            storedScheme === "dark" ||
+            (storedScheme !== "light" && window.matchMedia("(prefers-color-scheme: dark)").matches);
+          var experience = localStorage.getItem("believe-ai:experience") === "modern" ? "modern" : "classic";
+
+          var root = document.documentElement;
+          root.classList.toggle("dark", dark);
+          root.dataset.theme = dark ? "dark" : "light";
+          root.dataset.experience = experience;
+          root.style.colorScheme = dark ? "dark" : "light";
         } catch (_) {
-          // localStorage can throw in private mode — fall back to light.
+          // localStorage can throw in private mode — fall back to light/classic.
         }
       })();
     </script>
