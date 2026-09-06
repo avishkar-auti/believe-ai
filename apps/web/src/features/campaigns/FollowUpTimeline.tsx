@@ -17,7 +17,10 @@ export function FollowUpTimeline({
   compact?: boolean;
 }) {
   let day = 0;
-  const steps = [
+  // waitDays is optional because the initial email isn't waiting on anything —
+  // spelling that out lets the "Wait N days" connector below narrow instead of
+  // assuming every step has it.
+  const steps: { day: number; label: string; detail: string; waitDays?: number }[] = [
     { day: 0, label: "Initial email", detail: initialLabel },
     ...followUps.map((f) => {
       day += f.delayDays;
@@ -28,7 +31,9 @@ export function FollowUpTimeline({
 
   return (
     <div className="space-y-0">
-      {steps.map((s, i) => (
+      {steps.map((s, i) => {
+        const nextWait = steps[i + 1]?.waitDays;
+        return (
         <div key={i}>
           <div
             className={cn(
@@ -44,13 +49,14 @@ export function FollowUpTimeline({
               </p>
             </div>
           </div>
-          {i < steps.length - 1 && (
+          {nextWait !== undefined && (
             <div className="flex items-center gap-2 py-1 pl-4 text-[11px] text-fg-subtle">
-              <span className="h-3 w-px bg-line" /> Wait {steps[i + 1]!.waitDays} day{steps[i + 1]!.waitDays === 1 ? "" : "s"}
+              <span className="h-3 w-px bg-line" /> Wait {nextWait} day{nextWait === 1 ? "" : "s"}
             </div>
           )}
         </div>
-      ))}
+        );
+      })}
     </div>
   );
 }

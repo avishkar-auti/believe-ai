@@ -11,8 +11,18 @@ export async function createContact(input: CreateContactInput) {
   return res.data;
 }
 
+export async function fetchContact(id: string) {
+  const res = await apiClient.get<Contact>(`/contacts/${id}`);
+  return res.data;
+}
+
 export async function deleteContact(id: string) {
   await apiClient.delete(`/contacts/${id}`);
+}
+
+export async function updateContact(id: string, updates: Partial<CreateContactInput>) {
+  const res = await apiClient.patch<Contact>(`/contacts/${id}`, updates);
+  return res.data;
 }
 
 export async function parseContactsCsv(file: File) {
