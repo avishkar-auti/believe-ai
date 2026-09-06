@@ -136,7 +136,9 @@ services:
   - type: web
     name: believe-ai-web
     runtime: static
-    plan: free
+    # No `plan:` here — Render's static sites have no compute plan to pick;
+    # putting `free` (a web-service plan name) triggered a real validation
+    # error on Apply: "no such plan free for service type web".
     buildCommand: corepack enable && pnpm install --frozen-lockfile && pnpm --filter @believe-ai/shared build && pnpm --filter @believe-ai/web build
     staticPublishPath: apps/web/dist
     # A client-side router needs every path served index.html, or a
