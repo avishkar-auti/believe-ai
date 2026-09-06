@@ -2,14 +2,15 @@ import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { ExternalLink, FileText, Monitor, Search, Smartphone } from "lucide-react";
-import type { Campaign, Contact, Resume, Template, User } from "@believe-ai/shared";
+import type { Campaign, Contact, Resume, Template } from "@believe-ai/shared";
 import { cn } from "../../lib/cn.js";
 import { Select } from "../../components/ui/Select.js";
 import { previewTemplate } from "../templates/templatesApi.js";
 import { EmailPreview } from "./EmailPreview.js";
 import { StepTitle } from "./StepTitle.js";
 import { useTemplateUsageCounts } from "./useTemplateUsageCounts.js";
-import { buildVariableValues, findMissingVariables } from "./templateVariables.js";
+import { findUnresolved, usePersonalizationContext } from "../templates/usePersonalization.js";
+import { buildRecipientValues } from "./templateVariables.js";
 
 export function CampaignContentStep({
   subject,
@@ -21,7 +22,6 @@ export function CampaignContentStep({
   resumes,
   campaigns,
   recipients,
-  sender,
 }: {
   subject: string;
   templateId: string;
@@ -32,12 +32,12 @@ export function CampaignContentStep({
   resumes: Resume[] | undefined;
   campaigns: Campaign[] | undefined;
   recipients: Contact[];
-  sender: User | undefined;
 }) {
   const [search, setSearch] = useState("");
   const [previewMode, setPreviewMode] = useState<"desktop" | "mobile">("desktop");
   const [previewRecipientId, setPreviewRecipientId] = useState("");
   const usageCounts = useTemplateUsageCounts(campaigns);
+  const personalization = usePersonalizationContext();
 
   useEffect(() => {
     if (recipients.length > 0 && !recipients.some((r) => r.id === previewRecipientId)) setPreviewRecipientId(recipients[0]!.id);
@@ -46,7 +46,7 @@ export function CampaignContentStep({
   const filtered = templates?.filter((t) => t.name.toLowerCase().includes(search.trim().toLowerCase())) ?? [];
   const selectedTemplate = templates?.find((t) => t.id === templateId);
   const recipient = recipients.find((r) => r.id === previewRecipientId);
-  const values = buildVariableValues(recipient, sender);
+  const values = buildRecipientValues(recipient);
 
   const previewQuery = useQuery({
     queryKey: ["template-preview", templateId, previewRecipientId, subject],
@@ -60,7 +60,9 @@ export function CampaignContentStep({
     enabled: Boolean(selectedTemplate && recipient),
   });
 
-  const missing = selectedTemplate ? findMissingVariables(subject.trim() || selectedTemplate.subject, selectedTemplate.body, values) : [];
+  const unresolved = selectedTemplate
+    ? findUnresolved([subject.trim() || selectedTemplate.subject, selectedTemplate.body], values, personalization.data)
+    : [];
   const attachedResume = resumes?.find((r) => r.id === resumeId);
 
   return (
@@ -169,7 +171,7 @@ export function CampaignContentStep({
                 recipient={recipient}
                 subject={previewQuery.data?.subject ?? (subject.trim() || selectedTemplate.subject)}
                 body={previewQuery.data?.body ?? selectedTemplate.body}
-                missingVariables={missing}
+                unresolved={unresolved}
                 loading={previewQuery.isFetching && !previewQuery.data}
               />
             )}

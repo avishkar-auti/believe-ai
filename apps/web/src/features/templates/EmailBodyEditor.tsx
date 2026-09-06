@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { EditorContent, useEditor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
@@ -7,7 +7,6 @@ import Underline from "@tiptap/extension-underline";
 import MonacoEditor from "@monaco-editor/react";
 import {
   Bold,
-  Braces,
   Heading1,
   Heading2,
   Italic,
@@ -15,20 +14,20 @@ import {
   List,
   ListOrdered,
   Redo2,
+  TriangleAlert,
   Underline as UnderlineIcon,
   Undo2,
+  WrapText,
 } from "lucide-react";
-import {
-  CONTACT_TEMPLATE_VARIABLES,
-  SENDER_TEMPLATE_VARIABLES,
-  TEMPLATE_VARIABLE_LABELS,
-  type TemplateVariable,
-} from "@believe-ai/shared";
+import { Link as RouterLink } from "react-router-dom";
+import type { TemplateVariableValues } from "@believe-ai/shared";
 import { Tabs, type TabItem } from "../../components/ui/Tabs.js";
-import { Menu, type MenuItemDef } from "../../components/ui/Menu.js";
 import { useTheme } from "../../app/providers/ThemeProvider.js";
 import { cn } from "../../lib/cn.js";
 import { previewTemplate } from "./templatesApi.js";
+import { VariablePicker } from "./VariablePicker.js";
+import { formatEmailHtml } from "./formatEmailHtml.js";
+import { findUnresolved, usePersonalizationContext } from "./usePersonalization.js";
 
 const MODE_TABS: TabItem[] = [
   { value: "write", label: "Write" },
@@ -36,19 +35,18 @@ const MODE_TABS: TabItem[] = [
   { value: "preview", label: "Preview" },
 ];
 
-// A friendly, clearly-fake sample so Preview mode always shows fully
-// resolved content — real personalization (real recipient, real sender
-// links) happens at actual send time via the exact same rendering pipeline
-// (services/email_content.py), not a second one.
-const SAMPLE_VALUES: Record<TemplateVariable, string> = {
+// A clearly-fake stand-in recipient, so Preview shows a finished email
+// without a real contact selected. Sender variables are deliberately absent:
+// the server fills those from the real profile (see the /templates/preview
+// route), so Preview shows your actual name and links rather than a
+// placeholder that hides an empty profile until send day.
+const SAMPLE_RECIPIENT: TemplateVariableValues = {
   firstName: "Jordan",
   lastName: "Lee",
+  fullName: "Jordan Lee",
+  recipientEmail: "jordan.lee@example.com",
   company: "Acme Inc.",
   jobTitle: "Engineering Manager",
-  senderName: "Your name",
-  senderCompany: "Your company",
-  linkedin: "your-linkedin-url",
-  github: "your-github-url",
 };
 
 /** The Write / HTML / Preview email composer — used by both the Templates
@@ -70,8 +68,19 @@ export function EmailBodyEditor({
   minHeight?: number;
 }) {
   const [mode, setMode] = useState<"write" | "html" | "preview">("write");
+  // The rich editor emits HTML as one long line. HTML mode shows a
+  // pretty-printed copy instead, held here rather than derived from `value`
+  // on every render — re-formatting mid-keystroke would fight the cursor.
+  const [htmlSource, setHtmlSource] = useState("");
   const { resolved } = useTheme();
   const lastEmitted = useRef(value);
+
+  function changeMode(next: "write" | "html" | "preview") {
+    // Re-seed from `value` on entry, so edits made in Write mode show up here
+    // formatted rather than as whatever was last typed into Monaco.
+    if (next === "html") setHtmlSource(formatEmailHtml(value));
+    setMode(next);
+  }
 
   const editor = useEditor({
     extensions: [StarterKit, Underline, Link.configure({ openOnClick: false })],
@@ -99,26 +108,35 @@ export function EmailBodyEditor({
     lastEmitted.current = value;
   }, [editor, value]);
 
-  const variableMenuItems: MenuItemDef[] = useMemo(
-    () =>
-      [...CONTACT_TEMPLATE_VARIABLES, ...SENDER_TEMPLATE_VARIABLES].map((v) => ({
-        id: v,
-        label: TEMPLATE_VARIABLE_LABELS[v],
-        onSelect: () => editor?.chain().focus().insertContent(`{{${v}}}`).run(),
-      })),
-    [editor],
-  );
-
   const previewQuery = useQuery({
     queryKey: ["email-body-preview", subject, value],
-    queryFn: () => previewTemplate({ subject, body: value, bodyFormat: "html", values: SAMPLE_VALUES }),
+    queryFn: () => previewTemplate({ subject, body: value, bodyFormat: "html", values: SAMPLE_RECIPIENT }),
     enabled: mode === "preview" && value.trim().length > 0,
   });
+
+  // Warn while writing, never block: a profile field can be filled in later,
+  // and the campaign launch check (campaign_service._assert_personalization_ready)
+  // is the gate that actually stops a broken send going out.
+  const personalization = usePersonalizationContext();
+  const unresolved = findUnresolved([subject, value], SAMPLE_RECIPIENT, personalization.data).filter((u) => u.reason !== "recipient");
 
   return (
     <div className="overflow-hidden rounded-control border border-line">
       <div className="flex items-center justify-between border-b border-line bg-surface-2 px-2">
-        <Tabs items={MODE_TABS} value={mode} onChange={(v) => setMode(v as typeof mode)} ariaLabel="Email body editor mode" />
+        <Tabs items={MODE_TABS} value={mode} onChange={(v) => changeMode(v as typeof mode)} ariaLabel="Email body editor mode" />
+        {mode === "html" && (
+          <button
+            type="button"
+            onClick={() => {
+              const formatted = formatEmailHtml(htmlSource);
+              setHtmlSource(formatted);
+              onChange(formatted);
+            }}
+            className="my-1.5 flex items-center gap-1 rounded-lg px-2 py-1 text-caption text-fg-muted transition-colors hover:bg-fg/[0.06] hover:text-fg"
+          >
+            <WrapText className="h-3.5 w-3.5" /> Format
+          </button>
+        )}
         {mode === "write" && editor && (
           <div className="flex items-center gap-0.5 py-1.5">
             <ToolbarButton icon={Bold} label="Bold" active={editor.isActive("bold")} onClick={() => editor.chain().focus().toggleBold().run()} />
@@ -163,17 +181,7 @@ export function EmailBodyEditor({
             <ToolbarButton icon={Undo2} label="Undo" onClick={() => editor.chain().focus().undo().run()} />
             <ToolbarButton icon={Redo2} label="Redo" onClick={() => editor.chain().focus().redo().run()} />
             <span className="mx-1 h-4 w-px bg-line" />
-            <Menu
-              trigger={
-                <span
-                  title="Insert variable"
-                  className="flex h-7 w-7 items-center justify-center rounded-lg text-fg-muted transition-colors hover:bg-fg/[0.06] hover:text-fg"
-                >
-                  <Braces className="h-3.5 w-3.5" />
-                </span>
-              }
-              items={variableMenuItems}
-            />
+            <VariablePicker onInsert={(token) => editor?.chain().focus().insertContent(token).run()} />
           </div>
         )}
       </div>
@@ -188,10 +196,21 @@ export function EmailBodyEditor({
         <div style={{ height: minHeight + 40 }}>
           <MonacoEditor
             language="html"
-            value={value}
+            value={htmlSource}
             theme={resolved === "dark" ? "vs-dark" : "light"}
-            onChange={(v) => onChange(v ?? "")}
-            options={{ minimap: { enabled: false }, fontSize: 13, padding: { top: 12 }, scrollBeyondLastLine: false, automaticLayout: true, wordWrap: "on" }}
+            onChange={(v) => {
+              setHtmlSource(v ?? "");
+              onChange(v ?? "");
+            }}
+            options={{
+              minimap: { enabled: false },
+              fontSize: 13,
+              padding: { top: 12 },
+              scrollBeyondLastLine: false,
+              automaticLayout: true,
+              wordWrap: "on",
+              tabSize: 2,
+            }}
           />
         </div>
       )}
@@ -211,6 +230,27 @@ export function EmailBodyEditor({
               dangerouslySetInnerHTML={{ __html: previewQuery.data?.body ?? "" }}
             />
           )}
+        </div>
+      )}
+
+      {unresolved.length > 0 && (
+        <div className="flex items-start gap-2 border-t border-line bg-caution/5 px-3.5 py-2.5 text-caption text-fg-muted">
+          <TriangleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0 text-caution" />
+          <p>
+            {unresolved.map((u) => `{{${u.key}}}`).join(", ")}{" "}
+            {unresolved.some((u) => u.reason === "unknown") && unresolved.every((u) => u.reason === "unknown")
+              ? "isn't a variable this app knows — check the spelling, or it will send as blank text."
+              : "will send blank. "}
+            {unresolved.some((u) => u.reason === "sender") && (
+              <>
+                Fill in{" "}
+                <RouterLink to="/app/settings/profile" className="font-medium text-accent hover:underline">
+                  your profile
+                </RouterLink>{" "}
+                and every template picks it up.
+              </>
+            )}
+          </p>
         </div>
       )}
     </div>

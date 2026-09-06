@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import type { CampaignFollowUp } from "@believe-ai/shared";
-import { useCurrentUser } from "../../hooks/useCurrentUser.js";
+import { ApiError } from "../../lib/apiClient.js";
 import { fetchTemplates } from "../templates/templatesApi.js";
 import { fetchContacts } from "../contacts/contactsApi.js";
 import { fetchResumes } from "../resumes/resumeApi.js";
@@ -20,7 +20,6 @@ import { LaunchConfirmationModal } from "./LaunchConfirmationModal.js";
 
 export function CreateCampaignPage() {
   const navigate = useNavigate();
-  const { data: sender } = useCurrentUser();
   const { data: templates } = useQuery({ queryKey: ["templates"], queryFn: fetchTemplates });
   const { data: campaigns } = useQuery({ queryKey: ["campaigns"], queryFn: fetchCampaigns });
   const { data: resumes } = useQuery({ queryKey: ["resumes"], queryFn: fetchResumes });
@@ -82,12 +81,18 @@ export function CreateCampaignPage() {
 
   const createMutation = useMutation({
     mutationFn: createCampaign,
-    onError: () => setError("Couldn't create the campaign. Check the form and try again."),
+    onError: (err) =>
+      setError(err instanceof ApiError ? err.message : "Couldn't create the campaign. Check the form and try again."),
   });
 
   const launchMutation = useMutation({
     mutationFn: launchCampaign,
-    onError: () => setError("The campaign was created as a draft, but launching it failed — open it from Campaigns to try again."),
+    onError: (err) =>
+      setError(
+        err instanceof ApiError
+          ? `The campaign was created as a draft, but launching it failed: ${err.message}`
+          : "The campaign was created as a draft, but launching it failed — open it from Campaigns to try again.",
+      ),
   });
 
   function validateStep(s: number): string | null {
@@ -189,7 +194,6 @@ export function CreateCampaignPage() {
                 resumes={resumes}
                 campaigns={campaigns}
                 recipients={selectedRecipients}
-                sender={sender}
               />
             )}
             {step === 4 && (
@@ -215,7 +219,6 @@ export function CreateCampaignPage() {
                 followUps={followUps}
                 stopOnReply={stopOnReply}
                 recipients={selectedRecipients}
-                sender={sender}
               />
             )}
           </div>

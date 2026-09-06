@@ -12,6 +12,7 @@ import { Toggle } from "../../components/ui/Toggle.js";
 import { PageHeader } from "../../components/ui/PageHeader.js";
 import { apiClient } from "../../lib/apiClient.js";
 import { useCurrentUser } from "../../hooks/useCurrentUser.js";
+import { AppearanceSettings } from "./AppearanceSettings.js";
 import { fetchBelieveProfile, updateBelieveProfile } from "./believeProfileApi.js";
 import { fetchUsage } from "./usageApi.js";
 
@@ -27,7 +28,7 @@ const PROFILE_FIELDS: { key: keyof UpdateUserContextInput; label: string; placeh
 export function ProfileSettingsPage() {
   const { data: user } = useCurrentUser();
   const queryClient = useQueryClient();
-  const [form, setForm] = useState({ name: "", company: "", jobTitle: "", timezone: "UTC" });
+  const [form, setForm] = useState({ name: "", company: "", jobTitle: "", phone: "", timezone: "UTC" });
 
   useEffect(() => {
     if (user) {
@@ -35,6 +36,7 @@ export function ProfileSettingsPage() {
         name: user.name,
         company: user.company ?? "",
         jobTitle: user.jobTitle ?? "",
+        phone: user.phone ?? "",
         timezone: user.timezone,
       });
     }
@@ -46,6 +48,7 @@ export function ProfileSettingsPage() {
         name: form.name,
         company: form.company || null,
         jobTitle: form.jobTitle || null,
+        phone: form.phone || null,
         timezone: form.timezone,
       });
       return res.data;
@@ -63,13 +66,15 @@ export function ProfileSettingsPage() {
       <PageHeader
         eyebrow="Settings"
         title="Account"
-        description="Sender defaults for outreach and the AI writer."
+        description="Your profile fills the sender variables in every template — edit here and every template, preview and scheduled follow-up updates with it."
         actions={
           <Link to="/app/profile" className="inline-flex items-center gap-1.5 text-sm font-medium text-accent hover:underline">
             Edit your public profile <ArrowRight className="h-3.5 w-3.5" />
           </Link>
         }
       />
+
+      <AppearanceSettings />
 
       <Card>
         <CardHeader>
@@ -96,6 +101,16 @@ export function ProfileSettingsPage() {
                 value={form.company}
                 onChange={(e) => setForm((f) => ({ ...f, company: e.target.value }))}
               />
+            </label>
+            <label className="block text-sm text-fg-muted">
+              Phone
+              <Input
+                className="mt-1"
+                placeholder="Optional"
+                value={form.phone}
+                onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))}
+              />
+              <span className="mt-1 block text-caption text-fg-subtle">Used by the {"{{phone}}"} variable. Never shown on your public profile.</span>
             </label>
             <label className="block text-sm text-fg-muted">
               Timezone

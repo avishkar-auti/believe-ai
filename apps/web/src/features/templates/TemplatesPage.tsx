@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AnimatePresence, motion } from "framer-motion";
-import { Copy, FileText, Pencil, PenLine, Plus, Sparkles, Trash2 } from "lucide-react";
+import { Copy, FileText, Pencil, Plus, Sparkles, Trash2 } from "lucide-react";
 import type { Template } from "@believe-ai/shared";
 import { Button } from "../../components/ui/Button.js";
 import { Input } from "../../components/ui/Input.js";
@@ -12,10 +12,9 @@ import { MOTION } from "../../lib/motion.js";
 import { createTemplate, deleteTemplate, duplicateTemplate, fetchTemplates, updateTemplate } from "./templatesApi.js";
 import { TemplateChat } from "./TemplateChat.js";
 import { EmailBodyEditor } from "./EmailBodyEditor.js";
+import { SignOffPicker } from "./SignOffPicker.js";
 
 type PanelMode = "closed" | "manual" | "chat";
-
-const SIGNATURE_HTML = "<p>Best regards,<br>{{senderName}}<br>{{linkedin}} | {{github}}</p>";
 
 export function TemplatesPage() {
   const queryClient = useQueryClient();
@@ -38,10 +37,6 @@ export function TemplatesPage() {
   function closePanel() {
     setPanel("closed");
     setEditingId(null);
-  }
-
-  function appendSignature() {
-    setForm((f) => ({ ...f, body: f.body + SIGNATURE_HTML }));
   }
 
   const { data, isLoading } = useQuery({ queryKey: ["templates"], queryFn: fetchTemplates });
@@ -134,13 +129,7 @@ export function TemplatesPage() {
                     onChange={(e) => setForm((f) => ({ ...f, subject: e.target.value }))}
                   />
                   <div className="flex items-center justify-end">
-                    <button
-                      type="button"
-                      onClick={appendSignature}
-                      className="inline-flex items-center gap-1 rounded-pill border border-dashed border-line-strong px-2.5 py-1 text-xs font-medium text-fg-muted hover:border-accent hover:text-accent"
-                    >
-                      <PenLine className="h-3 w-3" /> Add sign-off
-                    </button>
+                    <SignOffPicker onInsert={(html) => setForm((f) => ({ ...f, body: f.body + html }))} />
                   </div>
                   <EmailBodyEditor subject={form.subject} value={form.body} onChange={(body) => setForm((f) => ({ ...f, body }))} />
                   <div className="flex items-center gap-2">

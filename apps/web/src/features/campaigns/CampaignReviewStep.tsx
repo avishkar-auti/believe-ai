@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { CheckCircle2, Circle, Rocket } from "lucide-react";
-import type { CampaignFollowUp, Contact, Resume, Template, User } from "@believe-ai/shared";
+import type { CampaignFollowUp, Contact, Resume, Template } from "@believe-ai/shared";
 import { cn } from "../../lib/cn.js";
 import { Select } from "../../components/ui/Select.js";
 import { SectionLabel } from "../../components/ui/Surface.js";
@@ -9,7 +9,8 @@ import { previewTemplate } from "../templates/templatesApi.js";
 import { EmailPreview } from "./EmailPreview.js";
 import { FollowUpTimeline } from "./FollowUpTimeline.js";
 import { StepTitle } from "./StepTitle.js";
-import { buildVariableValues, findMissingVariables } from "./templateVariables.js";
+import { findUnresolved, usePersonalizationContext } from "../templates/usePersonalization.js";
+import { buildRecipientValues } from "./templateVariables.js";
 
 function CheckRow({ ok, label }: { ok: boolean; label: string }) {
   return (
@@ -31,7 +32,6 @@ export function CampaignReviewStep({
   followUps,
   stopOnReply,
   recipients,
-  sender,
 }: {
   name: string;
   subject: string;
@@ -43,18 +43,31 @@ export function CampaignReviewStep({
   followUps: CampaignFollowUp[];
   stopOnReply: boolean;
   recipients: Contact[];
-  sender: User | undefined;
 }) {
   const [previewRecipientId, setPreviewRecipientId] = useState(recipients[0]?.id ?? "");
   const template = templates?.find((t) => t.id === templateId);
   const resume = resumes?.find((r) => r.id === resumeId);
   const recipient = recipients.find((r) => r.id === previewRecipientId) ?? recipients[0];
-  const values = buildVariableValues(recipient, sender);
-  const missing = template ? findMissingVariables(subject.trim() || template.subject, template.body, values) : [];
+  const personalization = usePersonalizationContext();
+  const values = buildRecipientValues(recipient);
+  const unresolved = template ? findUnresolved([subject.trim() || template.subject, template.body], values, personalization.data) : [];
+  // Only sender variables block: they resolve from one profile, so an empty
+  // one is empty in every email and the fix is a single edit. A contact
+  // missing a job title is normal and shouldn't hold up the other 199.
+  const blocking = unresolved.filter((u) => u.reason !== "recipient");
 
   const previewQuery = useQuery({
     queryKey: ["template-preview", "review", templateId, recipient?.id, subject],
-    queryFn: () => previewTemplate({ subject: subject.trim() || template!.subject, body: template!.body, values }),
+    queryFn: () =>
+      previewTemplate({
+        subject: subject.trim() || template!.subject,
+        body: template!.body,
+        // Without this the server falls back to "text" and runs the
+        // plain-text normalizer over real HTML, escaping every tag so the
+        // review pane showed raw markup instead of the email.
+        bodyFormat: template!.bodyFormat,
+        values,
+      }),
     enabled: Boolean(template && recipient),
   });
 
@@ -62,7 +75,10 @@ export function CampaignReviewStep({
     { ok: name.trim().length > 0 && subject.trim().length > 0, label: "Campaign configured" },
     { ok: recipients.length > 0, label: "Audience selected" },
     { ok: Boolean(templateId), label: "Initial template selected" },
-    { ok: missing.length === 0, label: "Personalization variables resolved" },
+    {
+      ok: blocking.length === 0,
+      label: blocking.length === 0 ? "Personalization variables resolved" : `Fill in your profile: ${blocking.map((u) => u.label).join(", ")}`,
+    },
     { ok: dailyLimit > 0, label: "Sending limit configured" },
     { ok: stopOnReply, label: "Reply stop condition enabled" },
   ];
@@ -119,7 +135,7 @@ export function CampaignReviewStep({
               recipient={recipient}
               subject={previewQuery.data?.subject ?? (subject.trim() || template.subject)}
               body={previewQuery.data?.body ?? template.body}
-              missingVariables={missing}
+              unresolved={unresolved}
               loading={previewQuery.isFetching && !previewQuery.data}
             />
           </div>
