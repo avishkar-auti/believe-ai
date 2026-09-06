@@ -21,6 +21,9 @@ export interface User {
   company: string | null;
   jobTitle: string | null;
   location: string | null;
+  /** Sign-off contact detail behind the {{phone}} merge variable. Never part
+   * of PublicProfile — it's for outreach signatures, not the public card. */
+  phone: string | null;
   timezone: string;
   role: UserRole;
   plan: PlanTier;
@@ -42,6 +45,7 @@ export interface UpdateProfileInput {
   company?: string | null;
   jobTitle?: string | null;
   location?: string | null;
+  phone?: string | null;
   timezone?: string;
   onboardingCompleted?: boolean;
   aiRecommendationsEnabled?: boolean;

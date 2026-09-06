@@ -60,6 +60,7 @@ class UserDto(BaseModel):
     company: str | None
     jobTitle: str | None
     location: str | None
+    phone: str | None
     timezone: str
     role: UserRole
     plan: PlanTier
@@ -81,6 +82,7 @@ class UpdateProfileInput(BaseModel):
     company: str | None = None
     jobTitle: str | None = None
     location: str | None = None
+    phone: str | None = Field(default=None, max_length=40)
     timezone: str | None = Field(default=None, min_length=1)
     onboardingCompleted: bool | None = None
     aiRecommendationsEnabled: bool | None = None

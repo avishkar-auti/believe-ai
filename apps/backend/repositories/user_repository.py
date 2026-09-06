@@ -48,6 +48,7 @@ async def update_profile(
     company: str | None = ...,  # type: ignore[assignment]
     job_title: str | None = ...,  # type: ignore[assignment]
     location: str | None = ...,  # type: ignore[assignment]
+    phone: str | None = ...,  # type: ignore[assignment]
     timezone: str | None = None,
     onboarding_completed: bool | None = None,
     ai_recommendations_enabled: bool | None = None,
@@ -75,6 +76,8 @@ async def update_profile(
         user.jobTitle = job_title
     if location is not ...:
         user.location = location
+    if phone is not ...:
+        user.phone = phone
     if timezone is not None:
         user.timezone = timezone
     if onboarding_completed is not None:

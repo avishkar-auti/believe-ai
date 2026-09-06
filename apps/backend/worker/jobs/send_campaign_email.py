@@ -22,7 +22,7 @@ from beanie import PydanticObjectId
 
 from agents.personalization_agent import personalize_email
 from core.config import get_settings
-from core.link_signing import rewrite_links_for_tracking
+from core.link_signing import extract_anchor_links, rewrite_links_for_tracking
 from core.logging import get_logger
 from email_providers.base import EmailAttachment, SendEmailInput
 from models.campaign import Campaign
@@ -30,10 +30,17 @@ from models.contact import Contact
 from models.email_log import EmailLog
 from models.template import Template, TemplateBodyFormat
 from models.user import User
-from repositories import email_log_repository, resume_repository, unsubscribe_repository, user_context_repository
+from repositories import (
+    campaign_link_repository,
+    email_event_repository,
+    email_log_repository,
+    resume_repository,
+    unsubscribe_repository,
+    user_context_repository,
+)
 from schemas.ai import AiPersonalizeRequest, ContactPersonalizationInput
-from services import notification_service
-from services.email_content import interpolate_html, normalize_legacy_text_to_html, to_html, to_plain_text
+from services import notification_service, personalization
+from services.email_content import interpolate_html, normalize_legacy_text_to_html, to_html, to_markdown_text, to_plain_text
 from services.email_provider_resolver import resolve_provider
 from services.template_service import interpolate
 from utils.user_context import format_user_context_for_prompt
@@ -47,21 +54,29 @@ _BASE_BACKOFF_SECONDS = 5
 # Tokens whose real value the AI provider is never given — it can't fill
 # these in on its own, and asking it to "preserve this exact {{}} syntax" in
 # free-form rewriting isn't reliable. Split off before the AI call instead;
-# see _split_signature().
-_SENDER_ONLY_TOKENS = {"senderName", "senderCompany", "linkedin", "github"}
-_SENDER_TOKEN_RE = re.compile(r"{{\s*(?:" + "|".join(_SENDER_ONLY_TOKENS) + r")\s*}}")
+# see _split_signature(). Derived from the registry (and its snake_case
+# aliases) rather than a hand-kept list, so a variable added there can't be
+# quietly handed to the model.
+_SENDER_TOKEN_ALIASES = {a for a, canonical in personalization.ALIASES.items() if canonical in personalization.SENDER_KEYS}
+_SENDER_TOKEN_NAMES = sorted(personalization.SENDER_KEYS | _SENDER_TOKEN_ALIASES)
+_SENDER_TOKEN_RE = re.compile(r"{{\s*(?:" + "|".join(_SENDER_TOKEN_NAMES) + r")\s*}}")
 
 
 def _split_signature(body: str) -> tuple[str, str]:
     """Splits a template body into (content, signature) at the first
-    sender-only token — everything from there on (typically a "Best
-    regards, {{senderName}} / {{linkedin}} | {{github}}" sign-off) is
-    treated as the signature. Only `content` is sent to the AI for
-    personalization; `signature` is resolved by plain interpolate() and
-    appended to the AI's output afterward. This makes {{senderName}} /
-    {{linkedin}} / {{github}} resolve to the sender's real name and links
-    the same way whether or not AI personalization is on — the AI never
-    sees or has to preserve those tokens verbatim.
+    sender token — everything from there on (typically a "Best regards,
+    {{senderName}} / {{linkedin}} | {{github}}" sign-off) is treated as the
+    signature. Only `content` is sent to the AI for personalization;
+    `signature` is resolved by plain interpolate() and appended to the AI's
+    output afterward. That's what makes every sender variable resolve to the
+    real profile value whether or not AI personalization is on — the model
+    never sees or has to preserve those tokens verbatim.
+
+    A body using a sender variable mid-sentence ("I'm a {{senderTitle}}
+    at...") therefore has its tail excluded from personalization. That's the
+    deliberate trade: an un-personalized tail still says the right thing,
+    whereas a token the model reworded or dropped loses the value outright —
+    exactly the silent-loss failure this pipeline exists to prevent.
 
     Returns ("", body's sender tokens) only in the degenerate case where the
     whole template is a signature — the AI still gets called with an empty
@@ -113,6 +128,12 @@ async def _maybe_complete_campaign(campaign_id: PydanticObjectId) -> None:
 
 async def _fail_log(email_log_id: PydanticObjectId, campaign_id: PydanticObjectId, error_message: str) -> None:
     await email_log_repository.set_status(email_log_id, "FAILED", error_message=error_message)
+    log = await EmailLog.get(email_log_id)
+    if log and log.id:
+        await email_event_repository.record(
+            campaign_id=log.campaignId, contact_id=log.contactId, email_log_id=log.id, user_id=log.userId,
+            event_type="FAILED", metadata={"error": error_message},
+        )
     await _maybe_complete_campaign(campaign_id)
 
 
@@ -143,7 +164,7 @@ async def _schedule_next_step(email_log: EmailLog, campaign: Campaign) -> None:
     await pool.enqueue_job("send_campaign_email", str(next_log.id), _job_id=str(next_log.id), _defer_by=delay_ms / 1000)
 
 
-_RAW_INTERPOLATE_KEYS = frozenset({"linkedin", "github"})
+_RAW_INTERPOLATE_KEYS = personalization.LINK_KEYS
 
 
 async def _build_personalized_content(
@@ -154,7 +175,7 @@ async def _build_personalized_content(
     template_body: str,
     body_format: TemplateBodyFormat,
     contact: Contact,
-    values: dict[str, str | None],
+    values: dict[str, str],
 ) -> tuple[str, str]:
     """Personalizes via the AI provider when the campaign has it enabled,
     falling back to plain {{variable}} interpolation if personalization is
@@ -163,25 +184,30 @@ async def _build_personalized_content(
     Returns (subject, body_html) — body is always final, rendered, merge-
     variable-resolved HTML, regardless of which path produced it or what
     format the template was stored in. Real HTML is never handed to the AI
-    provider for rewriting: personalization always operates on a plain-text
-    view of the body (to_plain_text() first, for an HTML-format template),
-    and the result is re-rendered to HTML afterward via the same
+    provider for rewriting: personalization always operates on a text view of
+    the body (to_markdown_text() first, for an HTML-format template, so links
+    survive as [label](url)), and the result is re-rendered to HTML afterward
+    via the same
     normalize_legacy_text_to_html() used for every other plain-text body —
     the one path that can't corrupt markup, since the model never sees any."""
-    # interpolate()/interpolate_html() leave an unrecognized placeholder blank,
-    # not a None value — drop empty variables so a missing company/jobTitle
-    # renders as "" too.
-    present_values = {k: v for k, v in values.items() if v is not None}
-    subject = interpolate(subject_source, present_values)
+    # `values` comes from services/personalization.py, which omits fields the
+    # profile or contact genuinely doesn't have — interpolate() renders those
+    # as "" rather than leaking a literal "None" into the email.
+    subject = interpolate(subject_source, values)
 
     def render_fallback() -> str:
         rendered_html = to_html(template_body, body_format)
-        return interpolate_html(rendered_html, present_values, raw_keys=_RAW_INTERPOLATE_KEYS)
+        return interpolate_html(rendered_html, values, raw_keys=_RAW_INTERPOLATE_KEYS)
 
     if not personalization_enabled:
         return subject, render_fallback()
 
-    plain_body = template_body if body_format == "text" else to_plain_text(template_body)
+    # to_markdown_text, not to_plain_text: the AI is handed a text view of the
+    # body and its output is re-rendered to HTML afterwards, so any link has to
+    # survive that trip. "label (url)" cannot be turned back into an anchor —
+    # it used to arrive in the inbox as bare URL text with a broken href.
+    # [label](url) round-trips, and models preserve it reliably.
+    plain_body = template_body if body_format == "text" else to_markdown_text(template_body)
     content, signature = _split_signature(plain_body)
 
     try:
@@ -223,9 +249,7 @@ async def _build_personalized_content(
         # real link.
         combined_plain = f"{result.body}\n\n{signature}" if signature else result.body
         rendered_html = normalize_legacy_text_to_html(combined_plain)
-        return interpolate(result.subject, present_values), interpolate_html(
-            rendered_html, present_values, raw_keys=_RAW_INTERPOLATE_KEYS
-        )
+        return interpolate(result.subject, values), interpolate_html(rendered_html, values, raw_keys=_RAW_INTERPOLATE_KEYS)
     except Exception as err:  # noqa: BLE001 — AI assists, never blocks the core send workflow
         logger.warning("AI personalization failed for user %s, falling back to template interpolation: %s", user_id, err)
         return subject, render_fallback()
@@ -277,21 +301,22 @@ async def _send(email_log_id: str) -> None:
         await _fail_log(log.id, log.campaignId, "Recipient is unsubscribed")
         return
 
-    linkedin_url = sender.socialLinks.get("linkedin")
-    github_url = sender.socialLinks.get("github")
-    values: dict[str, str | None] = {
-        "firstName": contact.firstName,
-        "lastName": contact.lastName,
-        "company": contact.company,
-        "jobTitle": contact.jobTitle,
-        "senderName": sender.name or None,
-        "senderCompany": sender.company,
-        # Embedded as real anchors (not the bare URL) so {{linkedin}}/{{github}}
-        # render as clickable links wherever they're dropped into the body —
-        # e.g. a "{{senderName}}\n{{linkedin}} | {{github}}" sign-off.
-        "linkedin": f'<a href="{linkedin_url}">LinkedIn</a>' if linkedin_url else None,
-        "github": f'<a href="{github_url}">GitHub</a>' if github_url else None,
-    }
+    # Both halves come from services/personalization.py — the same resolver
+    # behind template preview, so what the composer showed is what this email
+    # renders. Sender values are derived once per job from the profile
+    # document already fetched above; one job is one recipient, so that's the
+    # narrowest granularity available here, and only the recipient half varies.
+    context = personalization.PersonalizationContext(
+        sender=personalization.sender_values_for_user(sender),
+        recipient=personalization.build_recipient_values(
+            first_name=contact.firstName,
+            last_name=contact.lastName,
+            email=contact.email,
+            company=contact.company,
+            job_title=contact.jobTitle,
+        ),
+    )
+    values = context.values()
 
     subject_source = (campaign.subject or template.subject) if log.stepIndex == 0 else (subject_override or template.subject)
     subject, body_html = await _build_personalized_content(
@@ -316,8 +341,18 @@ async def _send(email_log_id: str) -> None:
     # link is deliberately excluded — opting out must never look like engagement,
     # and it has to keep working even if tracking is off.
     assert settings.encryption_key is not None
+    link_ids: dict[str, str] = {}
+    if campaign.trackingEnabled:
+        for destination, anchor_text in extract_anchor_links(body_html):
+            if destination == unsubscribe_url:
+                continue
+            campaign_link = await campaign_link_repository.get_or_create(log.campaignId, log.userId, destination, anchor_text)
+            if campaign_link.id:
+                link_ids[destination] = str(campaign_link.id)
     tracked_body_html = (
-        rewrite_links_for_tracking(body_html, log.trackingToken, api_base_url, settings.encryption_key, skip_urls=[unsubscribe_url])
+        rewrite_links_for_tracking(
+            body_html, log.trackingToken, api_base_url, settings.encryption_key, skip_urls=[unsubscribe_url], link_ids=link_ids
+        )
         if campaign.trackingEnabled
         else body_html
     )
@@ -360,7 +395,13 @@ async def _send(email_log_id: str) -> None:
     log.status = "SENT"
     log.providerMessageId = result.provider_message_id
     log.sentAt = datetime.now(UTC)
+    log.lastActivityAt = log.sentAt
     await log.save()
+    if result.thread_id:
+        await email_log_repository.set_thread_info(log.id, thread_id=result.thread_id)
+    await email_event_repository.record(
+        campaign_id=log.campaignId, contact_id=log.contactId, email_log_id=log.id, user_id=log.userId, event_type="SENT"
+    )
 
     # Must run before the completion check — it may queue a follow-up, and a
     # campaign with a pending follow-up isn't finished.

@@ -26,6 +26,7 @@ from repositories import (
     resume_repository,
     template_repository,
     unsubscribe_repository,
+    user_repository,
 )
 from repositories.email_log_repository import RecipientSegment
 from schemas.ai import AiEmailGenerationRequest, AiEmailGenerationResult
@@ -43,7 +44,7 @@ from schemas.campaign import (
     UpdateCampaignInput,
 )
 from schemas.pagination import PaginatedResult, total_pages
-from services import usage_service
+from services import personalization, usage_service
 from utils.mongo_datetime import as_aware_utc
 from worker.client import get_worker_pool
 
@@ -220,6 +221,50 @@ async def update(campaign_id: ObjectId, user_id: ObjectId, input_: UpdateCampaig
     return _to_dto(doc)
 
 
+async def _assert_personalization_ready(doc: Campaign, user_id: ObjectId) -> None:
+    """Blocks a launch whose templates use merge variables that would render
+    blank for every single recipient.
+
+    Only sender variables and unrecognized names are checked. Recipient
+    variables are deliberately not: contacts legitimately have partial data,
+    and one contact missing a job title shouldn't stop a send to two hundred
+    others. A sender variable, by contrast, resolves from one profile — if
+    it's empty here it's empty in every email, and the fix is a single edit
+    on the Profile page.
+
+    Checked at launch rather than on save so a half-written template can
+    still be saved, and so a profile filled in afterwards needs no template
+    change to take effect.
+    """
+    user = await user_repository.find_by_id(user_id)
+    if not user:
+        raise NotFoundError("User not found")
+    sender_values = personalization.sender_values_for_user(user)
+
+    template_ids = [doc.templateId, *(f.templateId for f in doc.followUps)]
+    texts: list[str] = [doc.subject or "", *(f.subjectOverride or "" for f in doc.followUps)]
+    for template_id in template_ids:
+        if not template_id:
+            continue
+        template = await template_repository.find_by_id(template_id, user_id)
+        if template:
+            texts.extend([template.subject, template.body])
+
+    issues = personalization.validate(*texts, values=sender_values)
+    missing = [i.label for i in issues if i.reason == "missing" and i.group == "sender"]
+    unknown = [i.variable for i in issues if i.reason == "unknown"]
+
+    if missing:
+        fields = ", ".join(dict.fromkeys(missing))
+        raise ValidationError(
+            f"Your templates use {fields}, which {'is' if len(missing) == 1 else 'are'} empty on your profile. "
+            f"Fill {'it' if len(missing) == 1 else 'them'} in on the Profile page, or remove the variable from the template."
+        )
+    if unknown:
+        names = ", ".join(f"{{{{{name}}}}}" for name in dict.fromkeys(unknown))
+        raise ValidationError(f"Your templates use unknown variable(s): {names}. They would render as empty text for every recipient.")
+
+
 async def launch(campaign_id: ObjectId, user_id: ObjectId) -> CampaignDto:
     """Creates one EmailLog per sendable recipient (skipping anyone unsubscribed
     or previously suppressed) and schedules a send job for each, spaced out
@@ -231,6 +276,7 @@ async def launch(campaign_id: ObjectId, user_id: ObjectId) -> CampaignDto:
     is_future_schedule = bool(doc.scheduledAt and as_aware_utc(doc.scheduledAt) > datetime.now(UTC))
     target_status: CampaignStatus = "SCHEDULED" if is_future_schedule else "RUNNING"
     _assert_transition(doc.status, target_status)
+    await _assert_personalization_ready(doc, user_id)
 
     contacts = await contact_repository.find_many_by_ids(doc.audienceContactIds, user_id)
     unsubscribed_emails = await unsubscribe_repository.find_unsubscribed_emails(user_id, [c.email for c in contacts])

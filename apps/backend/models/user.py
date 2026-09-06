@@ -25,6 +25,9 @@ class User(Document):
     company: str | None = None
     jobTitle: str | None = None
     location: str | None = None
+    # Sign-off contact detail, surfaced as the {{phone}} merge variable. Optional
+    # and never shown on the public profile — it exists for outreach signatures.
+    phone: str | None = None
     timezone: str = "UTC"
     role: UserRole = "user"
     plan: PlanTier = "FREE"

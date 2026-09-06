@@ -22,9 +22,12 @@ from __future__ import annotations
 
 import html
 import re
+from collections.abc import Callable
 
 import nh3
 from bs4 import BeautifulSoup, NavigableString, Tag
+
+from services.personalization import VARIABLE_PATTERN, canonical_key
 
 _ALLOWED_TAGS = {"p", "br", "b", "strong", "i", "em", "u", "a", "ul", "ol", "li", "h1", "h2", "h3", "span"}
 # "rel" is deliberately absent — nh3 auto-adds rel="noopener noreferrer" to
@@ -32,13 +35,29 @@ _ALLOWED_TAGS = {"p", "br", "b", "strong", "i", "em", "u", "a", "ul", "ol", "li"
 # hits an nh3/ammonia panic (see template_service.py's identical note).
 _ALLOWED_ATTRIBUTES = {"a": {"href", "target"}}
 
-_INTERPOLATE_PATTERN = re.compile(r"{{\s*(\w+)\s*}}")
+# Placeholder for a resolved anchor while the other inline passes run. NUL
+# survives neither html.escape() output nor any real template text, so it
+# cannot collide with content.
+_ANCHOR_SENTINEL = "\x00"
 
 _BULLET_RE = re.compile(r"^[-*]\s+(.*)")
 _NUMBERED_RE = re.compile(r"^\d+[.)]\s+(.*)")
 _BOLD_RE = re.compile(r"\*\*(.+?)\*\*|__(.+?)__")
 _ITALIC_RE = re.compile(r"(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)|(?<!_)_(?!_)(.+?)(?<!_)_(?!_)")
-_URL_RE = re.compile(r"(https?://[^\s<>\"]+)")
+# Trailing punctuation belongs to the sentence, not the URL. Without the
+# final character class, "see (https://x.com/a)" linkified the ")" into the
+# href and produced a dead link.
+_URL_RE = re.compile(r"(https?://[^\s<>\"]*[^\s<>\".,;:!?)\]}])")
+
+# A markdown link, the form to_markdown_text() emits so an anchor can survive
+# the HTML -> text -> AI -> HTML round trip. Models preserve this shape far
+# more reliably than raw <a> markup.
+_MD_LINK_RE = re.compile(r"\[([^\]]+)\]\((https?://[^\s)]+)\)")
+
+# HTML collapses any run of whitespace in normal flow content to one space;
+# to_plain_text has to do the same before it can tell an authored line break
+# from source indentation.
+_SOURCE_WHITESPACE_RE = re.compile(r"\s+")
 
 
 def sanitize_html(raw_html: str) -> str:
@@ -50,13 +69,30 @@ def sanitize_html(raw_html: str) -> str:
 
 def _inline_markdown_lite(line: str) -> str:
     """A handful of conventions people already type in a plain body —
-    **bold**, *italic*, bare URLs — rendered as real inline HTML. Never full
-    Markdown, just this fixed subset. The line is HTML-escaped first so any
-    literal <, >, or & in the source text can't be misread as markup."""
+    **bold**, *italic*, [label](url), bare URLs — rendered as real inline
+    HTML. Never full Markdown, just this fixed subset. The line is
+    HTML-escaped first so any literal <, >, or & in the source text can't be
+    misread as markup.
+
+    [label](url) is resolved first and parked behind a placeholder, because
+    the bold/italic/bare-URL passes that follow would otherwise chew the
+    anchor they just produced — an underscore in a URL turning into <em>, or
+    the href being linkified a second time."""
     escaped = html.escape(line)
+
+    anchors: list[str] = []
+
+    def park(match: re.Match[str]) -> str:
+        anchors.append(f'<a href="{match.group(2)}" target="_blank">{match.group(1)}</a>')
+        return f"{_ANCHOR_SENTINEL}{len(anchors) - 1}{_ANCHOR_SENTINEL}"
+
+    escaped = _MD_LINK_RE.sub(park, escaped)
     escaped = _BOLD_RE.sub(lambda m: f"<strong>{m.group(1) or m.group(2)}</strong>", escaped)
     escaped = _ITALIC_RE.sub(lambda m: f"<em>{m.group(1) or m.group(2)}</em>", escaped)
     escaped = _URL_RE.sub(lambda m: f'<a href="{m.group(1)}" target="_blank">{m.group(1)}</a>', escaped)
+
+    for index, anchor in enumerate(anchors):
+        escaped = escaped.replace(f"{_ANCHOR_SENTINEL}{index}{_ANCHOR_SENTINEL}", anchor)
     return escaped
 
 
@@ -96,11 +132,42 @@ def to_html(body: str, body_format: str) -> str:
     return normalize_legacy_text_to_html(body)
 
 
+def _plain_anchor(label: str, href: str) -> str:
+    """A plain-text reader can't click an <a> — surface the URL itself, not
+    just its label, or the link disappears entirely."""
+    return href if not label or label == href else f"{label} ({href})"
+
+
+def _markdown_anchor(label: str, href: str) -> str:
+    """Keeps the label attached to its URL in a form _inline_markdown_lite can
+    turn back into a real anchor."""
+    return href if not label or label == href else f"[{label}]({href})"
+
+
+def to_markdown_text(rendered_html: str) -> str:
+    """Same walk as to_plain_text, but links come out as [label](url) instead
+    of "label (url)".
+
+    This is the form handed to the AI personalizer. The plain form is lossy:
+    once <a href="X">LinkedIn</a> has become "LinkedIn (X)", nothing can
+    rebuild the anchor, so an AI-personalized send turned every link in the
+    body into bare URL text. Round-tripping through markdown keeps the label
+    and the href together, and normalize_legacy_text_to_html restores the
+    anchor afterwards."""
+    return _to_text(rendered_html, _markdown_anchor)
+
+
 def to_plain_text(rendered_html: str) -> str:
     """Real HTML -> plain-text conversion for the text/plain MIME
     fallback — walks the parsed tree rather than stripping tags with a
     regex, so paragraph spacing and list markers survive instead of the
     whole message collapsing onto one line."""
+    return _to_text(rendered_html, _plain_anchor)
+
+
+def _to_text(rendered_html: str, render_anchor: Callable[[str, str], str]) -> str:
+    """The shared tree walk behind to_plain_text and to_markdown_text — they
+    differ only in how an anchor is written out."""
     soup = BeautifulSoup(rendered_html, "html.parser")
     # Each entry is one rendered block — a paragraph, heading, or a whole
     # list (its items joined by a single newline, never a blank line, so a
@@ -108,17 +175,28 @@ def to_plain_text(rendered_html: str) -> str:
     blocks: list[str] = []
 
     def block_text(node: Tag) -> str:
+        # Collapse source whitespace first, exactly as HTML rendering does.
+        # A body authored in the HTML editor has indented source, and without
+        # this the newline after each <br> in the source would survive
+        # alongside the one <br> itself contributes — turning a sign-off into
+        # a double-spaced list. Doing it before the <br> pass means the only
+        # newlines left are the ones the author actually asked for.
+        for text_node in node.find_all(string=True):
+            collapsed = _SOURCE_WHITESPACE_RE.sub(" ", str(text_node))
+            if collapsed != str(text_node):
+                text_node.replace_with(NavigableString(collapsed))
         # <br> must become a real line break, not the space get_text() would
         # otherwise collapse it to alongside every other inline boundary.
         for br in node.find_all("br"):
             br.replace_with("\n")
-        # A plain-text reader can't click an <a> — surface the URL itself,
-        # not just its label, or the link disappears entirely.
         for anchor in node.find_all("a"):
             href = anchor.get("href", "")
             label = anchor.get_text(" ", strip=True)
-            anchor.replace_with(href if not label or label == href else f"{label} ({href})")
-        return node.get_text("").strip()
+            anchor.replace_with(render_anchor(label, href))
+        # Strip each line, not just the block: a body authored in the HTML
+        # editor is indented source, and that indentation is insignificant in
+        # HTML but would show up as real leading spaces in the text/plain part.
+        return "\n".join(line.strip() for line in node.get_text("").split("\n")).strip()
 
     def list_block(list_node: Tag, ordered: bool) -> str:
         lines = [
@@ -152,13 +230,17 @@ def interpolate_html(rendered_html: str, values: dict[str, str], *, raw_keys: fr
     """Same {{variable}} substitution used for plain templates, but every
     substituted value is HTML-escaped by default — a contact's company name
     containing & or < must never be able to alter the surrounding markup.
-    raw_keys names the small, server-controlled set of values (e.g. the
-    {{linkedin}}/{{github}} sign-off tokens, already built as trusted <a>
-    fragments) that should be inserted as-is instead."""
+    raw_keys names the small, server-controlled set of values (the
+    {{linkedin}}/{{github}}/{{portfolio}} sign-off tokens, built as trusted
+    <a> fragments by services/personalization.py) that should be inserted
+    as-is instead."""
 
     def replace(match: re.Match[str]) -> str:
-        key = match.group(1)
+        # canonical_key folds snake_case aliases onto the registry name, so a
+        # template written as {{sender_name}} resolves identically to
+        # {{senderName}} without rewriting anything already stored.
+        key = canonical_key(match.group(1))
         value = values.get(key, "")
         return value if key in raw_keys else html.escape(value)
 
-    return _INTERPOLATE_PATTERN.sub(replace, rendered_html)
+    return VARIABLE_PATTERN.sub(replace, rendered_html)
