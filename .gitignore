@@ -11,6 +11,13 @@ coverage/
 !.env.example
 !apps/*/.env.example
 
+# service-account / admin key files a console download can drop anywhere in
+# the tree (e.g. Firebase's "believe-8af92-firebase-adminsdk-*.json") — these
+# are full admin credentials, never partial like a .env value.
+*firebase-adminsdk*.json
+*-service-account.json
+*serviceAccountKey.json
+
 # logs
 *.log
 npm-debug.log*
