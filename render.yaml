@@ -139,7 +139,16 @@ services:
     # No `plan:` here — Render's static sites have no compute plan to pick;
     # putting `free` (a web-service plan name) triggered a real validation
     # error on Apply: "no such plan free for service type web".
-    buildCommand: corepack enable && pnpm install --frozen-lockfile && pnpm --filter @believe-ai/shared build && pnpm --filter @believe-ai/web build
+    #
+    # No `corepack enable` or `pnpm install` here either — Render detects
+    # the pnpm workspace and runs its own install before buildCommand runs
+    # at all (visible in the build log as "Installing dependencies with
+    # pnpm... Scope: all 4 workspace projects"). Calling `corepack enable`
+    # on top of that crashed the real build with "EROFS: read-only file
+    # system, unlink '/usr/bin/pnpm'" — it tries to relink a pnpm binary
+    # Render's image already manages read-only. buildCommand only needs to
+    # run the two workspace builds Render's own install doesn't do for you.
+    buildCommand: pnpm --filter @believe-ai/shared build && pnpm --filter @believe-ai/web build
     staticPublishPath: apps/web/dist
     # A client-side router needs every path served index.html, or a
     # refresh on e.g. /app/campaigns 404s instead of reaching React Router.
