@@ -90,7 +90,16 @@ configure_tracing(settings)
 # route in this service, only the Beanie-backed ones that actually need it —
 # same "degrade, don't block" pattern used throughout this service's request
 # handling, just applied to startup too.
-ODM_INIT_TIMEOUT_SECONDS = 10.0
+#
+# 10s was too tight for a real deploy: the very first connection a process
+# ever makes to a fresh MongoDB Atlas cluster (SRV DNS lookup + TLS handshake
+# + replica-set discovery, often across a different cloud provider/region
+# than the app host) reliably took longer than that on Render, hit this
+# timeout, and cancelled init_beanie() mid-registration — leaving some
+# Document models initialized and others not, a worse state than either
+# fully-up or fully-down. Confirmed by the boot log: "Waiting for
+# application startup" and the timeout warning were exactly 10.0s apart.
+ODM_INIT_TIMEOUT_SECONDS = 30.0
 
 # Local SQLite file backing the Job Outreach approval graph's checkpointer —
 # runtime pause/resume state, not domain data, so it deliberately doesn't live
