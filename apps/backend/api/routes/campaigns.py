@@ -200,3 +200,12 @@ async def update_campaign_route(
     campaign_id: PydanticObjectId, body: UpdateCampaignInput, mongo_user_id: MongoUserIdDep, _user_id: UserIdDep
 ) -> CampaignDto:
     return await campaign_service.update(campaign_id, mongo_user_id, body)
+
+
+@router.delete("/{campaign_id}")
+async def delete_campaign_route(
+    campaign_id: PydanticObjectId, mongo_user_id: MongoUserIdDep, _user_id: UserIdDep
+) -> dict[str, bool]:
+    await campaign_service.delete(campaign_id, mongo_user_id)
+    await audit_service.record(mongo_user_id, "campaign.deleted", "campaign", entity_id=str(campaign_id))
+    return {"deleted": True}

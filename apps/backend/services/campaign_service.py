@@ -153,6 +153,12 @@ async def get_by_id(campaign_id: ObjectId, user_id: ObjectId) -> CampaignDto:
     return _to_dto(doc)
 
 
+async def delete(campaign_id: ObjectId, user_id: ObjectId) -> None:
+    deleted = await campaign_repository.delete(campaign_id, user_id)
+    if not deleted:
+        raise NotFoundError("Campaign not found")
+
+
 async def create(user_id: ObjectId, input_: CreateCampaignInput) -> CampaignDto:
     await usage_service.assert_can_create_campaign(user_id)
 

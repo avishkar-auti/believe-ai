@@ -50,3 +50,11 @@ async def set_status(campaign_id: ObjectId, user_id: ObjectId, status: CampaignS
 
 async def count_by_user_id(user_id: ObjectId) -> int:
     return await Campaign.find(Campaign.userId == user_id).count()
+
+
+async def delete(campaign_id: ObjectId, user_id: ObjectId) -> bool:
+    doc = await find_by_id(campaign_id, user_id)
+    if not doc:
+        return False
+    await doc.delete()
+    return True

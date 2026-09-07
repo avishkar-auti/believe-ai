@@ -32,6 +32,10 @@ export async function createCampaign(input: CreateCampaignInput) {
   return res.data;
 }
 
+export async function deleteCampaign(id: string) {
+  await apiClient.delete(`/campaigns/${id}`);
+}
+
 async function transition(id: string, action: "launch" | "pause" | "resume" | "cancel") {
   const res = await apiClient.post<Campaign>(`/campaigns/${id}/${action}`);
   return res.data;

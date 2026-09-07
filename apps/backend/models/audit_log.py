@@ -18,6 +18,7 @@ AuditAction = Literal[
     "campaign.paused",
     "campaign.resumed",
     "campaign.cancelled",
+    "campaign.deleted",
     "contacts.imported",
     "template.deleted",
     "integration.connected",

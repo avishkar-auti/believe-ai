@@ -1,14 +1,16 @@
-import { useQuery } from "@tanstack/react-query";
+import { useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
-import { ChevronRight, FileText, Megaphone, Plus, Rocket, Send, Users } from "lucide-react";
+import { ChevronRight, FileText, Megaphone, Plus, Rocket, Send, Trash2, Users } from "lucide-react";
 import { Button } from "../../components/ui/Button.js";
 import { Card } from "../../components/ui/Card.js";
 import { Badge } from "../../components/ui/Badge.js";
+import { ConfirmDialog } from "../../components/ui/ConfirmDialog.js";
 import { PageHeader } from "../../components/ui/PageHeader.js";
 import { Spinner } from "../../components/ui/Spinner.js";
 import { MOTION } from "../../lib/motion.js";
-import { fetchCampaigns } from "./campaignsApi.js";
+import { deleteCampaign, fetchCampaigns } from "./campaignsApi.js";
 import { CAMPAIGN_STATUS_DOT, CAMPAIGN_STATUS_TONE } from "./statusTone.js";
 
 // Mirrors CreateCampaignPage's real step sequence (StepTitle calls at step
@@ -23,6 +25,16 @@ const CREATE_STEPS = [
 
 export function CampaignsPage() {
   const { data, isLoading } = useQuery({ queryKey: ["campaigns"], queryFn: fetchCampaigns });
+  const queryClient = useQueryClient();
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
+
+  const deleteMutation = useMutation({
+    mutationFn: deleteCampaign,
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["campaigns"] });
+      setDeleteTarget(null);
+    },
+  });
 
   return (
     <div className="space-y-6">
@@ -88,10 +100,11 @@ export function CampaignsPage() {
                 initial={{ opacity: 0, x: -6 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ duration: 0.25, delay: i * 0.03 }}
+                className="group flex items-center gap-1 transition-colors hover:bg-fg/[0.03]"
               >
                 <Link
                   to={`/app/campaigns/${c.id}`}
-                  className="group flex items-center justify-between gap-4 px-5 py-4 transition-colors hover:bg-fg/[0.03] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+                  className="flex min-w-0 flex-1 items-center justify-between gap-4 px-5 py-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
                 >
                   <div className="flex min-w-0 items-center gap-3">
                     <span className={`h-2 w-2 shrink-0 rounded-full ${CAMPAIGN_STATUS_DOT[c.status]}`} aria-hidden="true" />
@@ -108,11 +121,30 @@ export function CampaignsPage() {
                     <ChevronRight className="h-4 w-4 text-fg-subtle transition-transform duration-200 group-hover:translate-x-0.5 group-hover:text-fg-muted" />
                   </div>
                 </Link>
+                <button
+                  type="button"
+                  aria-label={`Delete ${c.name}`}
+                  onClick={() => setDeleteTarget({ id: c.id, name: c.name })}
+                  className="mr-3 shrink-0 rounded-control p-2 text-fg-subtle opacity-0 transition-colors hover:bg-critical/10 hover:text-critical focus-visible:opacity-100 group-hover:opacity-100"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
               </motion.li>
             ))}
           </ul>
         </Card>
       )}
+
+      <ConfirmDialog
+        open={deleteTarget !== null}
+        title={`Delete "${deleteTarget?.name}"?`}
+        description="This permanently deletes the campaign. Recipients who already received an email keep it — this only removes the campaign record itself."
+        confirmLabel="Delete"
+        destructive
+        busy={deleteMutation.isPending}
+        onConfirm={() => deleteTarget && deleteMutation.mutate(deleteTarget.id)}
+        onCancel={() => setDeleteTarget(null)}
+      />
     </div>
   );
 }
