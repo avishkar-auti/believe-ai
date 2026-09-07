@@ -46,7 +46,11 @@ async def gmail_callback_route(code: str, state: str, settings: SettingsDep) -> 
     email = await integration_service.handle_gmail_callback(settings, user_id, code)
     # `state` is the authenticated userId, threaded through Google's redirect.
     await audit_service.record(user_id, "integration.connected", "integration", metadata={"provider": "gmail", "email": email})
-    return RedirectResponse(url=f"{settings.app_base_url}/settings/integrations?gmail=connected")
+    # cors_origin, not app_base_url: this redirects the BROWSER to the frontend
+    # SPA route, whereas app_base_url is this service's own public URL (used to
+    # build tracking-pixel/click links in outbound emails) — the two are the
+    # same origin only in local dev, and diverge on a real deploy.
+    return RedirectResponse(url=f"{settings.cors_origin}/settings/integrations?gmail=connected")
 
 
 @router.post("/outlook/connect", response_model=ConsentUrlResult)
@@ -74,4 +78,4 @@ async def outlook_callback_route(code: str, state: str, settings: SettingsDep) -
     email = await integration_service.handle_outlook_callback(settings, user_id, code)
     # `state` is the authenticated userId, threaded through Microsoft's redirect.
     await audit_service.record(user_id, "integration.connected", "integration", metadata={"provider": "outlook", "email": email})
-    return RedirectResponse(url=f"{settings.app_base_url}/settings/integrations?outlook=connected")
+    return RedirectResponse(url=f"{settings.cors_origin}/settings/integrations?outlook=connected")
