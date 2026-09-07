@@ -4,8 +4,11 @@ build/
 .turbo/
 coverage/
 
-# env files (examples ARE tracked)
-.env
+# env files (examples ARE tracked). *.env (not just the exact name ".env")
+# so a differently-named credentials dump — e.g. "atlas-credentials.env"
+# saved from a MongoDB Atlas connection dialog — is covered too, anywhere
+# in the tree, not just the exact filenames listed below.
+*.env
 .env.local
 .env.*.local
 !.env.example
