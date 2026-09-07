@@ -34,7 +34,13 @@ name: Process email queue
 # outside Render's private network, so the internal one won't resolve),
 # ENCRYPTION_KEY, GEMINI_API_KEY, GROQ_API_KEY, FIREBASE_PROJECT_ID,
 # FIREBASE_CLIENT_EMAIL, FIREBASE_PRIVATE_KEY, APP_BASE_URL (the deployed
-# backend's Render URL, for building tracking links).
+# backend's Render URL, for building tracking links), GMAIL_CLIENT_ID,
+# GMAIL_CLIENT_SECRET, GMAIL_REDIRECT_URI (must be the same production
+# redirect URI registered on the Google OAuth client — this worker
+# refreshes each recipient's stored OAuth token before calling Gmail's
+# API to actually send, so without these every send fails at that step
+# with "Gmail OAuth is not configured on this server", even though the
+# job was pulled off the queue and processed successfully otherwise).
 
 on:
   schedule:
@@ -80,3 +86,6 @@ jobs:
           FIREBASE_PROJECT_ID: ${{ secrets.FIREBASE_PROJECT_ID }}
           FIREBASE_CLIENT_EMAIL: ${{ secrets.FIREBASE_CLIENT_EMAIL }}
           FIREBASE_PRIVATE_KEY: ${{ secrets.FIREBASE_PRIVATE_KEY }}
+          GMAIL_CLIENT_ID: ${{ secrets.GMAIL_CLIENT_ID }}
+          GMAIL_CLIENT_SECRET: ${{ secrets.GMAIL_CLIENT_SECRET }}
+          GMAIL_REDIRECT_URI: ${{ secrets.GMAIL_REDIRECT_URI }}
