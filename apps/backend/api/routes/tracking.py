@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import base64
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import RedirectResponse, Response
 
 from api.dependencies import SettingsDep
@@ -30,12 +30,15 @@ async def open_pixel_route(token: str) -> Response:
 
 
 @router.get("/click/{token}")
-async def click_route(token: str, u: str, s: str, settings: SettingsDep, l: str | None = None) -> RedirectResponse:
+async def click_route(
+    token: str, u: str, s: str, settings: SettingsDep, link_id: str | None = Query(default=None, alias="l")
+) -> RedirectResponse:
     """`u` is fully attacker-controlled by the time it reaches us, so it is
     only honoured when accompanied by a valid HMAC (`s`) produced when the
     email was built. Without that check this endpoint is an open redirect.
-    `l` (CampaignLink id) is unsigned and used only for click attribution —
-    see core/link_signing.py's rewrite_links_for_tracking docstring."""
+    `link_id` (CampaignLink id, wire param `l`) is unsigned and used only for
+    click attribution — see core/link_signing.py's rewrite_links_for_tracking
+    docstring."""
     if not u or not s:
         raise HTTPException(status_code=400, detail="Missing or invalid redirect URL")
     # Protocol allowlist first: a bare URL check would happily accept
@@ -45,7 +48,7 @@ async def click_route(token: str, u: str, s: str, settings: SettingsDep, l: str 
     if not settings.encryption_key or not verify_tracked_url(u, s, settings.encryption_key):
         raise HTTPException(status_code=400, detail="Invalid tracking signature")
 
-    await tracking_service.record_click(token, l)
+    await tracking_service.record_click(token, link_id)
     return RedirectResponse(url=u)
 
 

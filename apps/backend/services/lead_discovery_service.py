@@ -23,6 +23,7 @@ from pymongo.errors import DuplicateKeyError
 from clients.serpapi_client import NON_LOCATIONS, DiscoveredPerson, build_people_search_query, is_technical_role, search_people
 from core.config import Settings
 from core.errors import NotFoundError, ValidationError
+from models.contact import ContactOutreachChannel
 from models.external_api_usage import ExternalApiUsage
 from models.job_lead import JobLead
 from models.serp_lead_cache import CachedPersonEntry, SerpLeadCache
@@ -237,7 +238,7 @@ async def add_to_contacts(lead_id: ObjectId, user_id: ObjectId, email: str | Non
     first_name = name_parts[0] if name_parts else lead.name
     last_name = " ".join(name_parts[1:])
 
-    outreach_channel = "email" if email else "linkedin"
+    outreach_channel: ContactOutreachChannel = "email" if email else "linkedin"
     contact_email = email or f"lead-{lead_id}@leads.believe.ai"
 
     contact = await contact_repository.create(

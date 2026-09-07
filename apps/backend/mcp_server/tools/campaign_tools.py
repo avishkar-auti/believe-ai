@@ -25,7 +25,7 @@ async def get_campaign_insights_tool(firebase_id_token: str, campaign_id: str) -
     """
     firebase_uid = await verify_firebase_token(firebase_id_token)
     user_id = await resolve_mongo_user_id(firebase_uid)
-    result = await get_campaign_insights(get_settings(), get_database(), user_id, parse_object_id(campaign_id))
+    result = await get_campaign_insights(get_settings(), user_id, parse_object_id(campaign_id))
     return result.model_dump()
 
 

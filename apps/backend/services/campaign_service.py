@@ -450,7 +450,9 @@ async def get_engagement_timeseries(campaign_id: ObjectId, user_id: ObjectId) ->
         by_date.setdefault(date, {"SENT": 0, "OPENED": 0, "CLICKED": 0, "REPLIED": 0})[event_type] = row["count"]
 
     return [
-        EngagementTimeseriesPoint(date=date, sent=counts["SENT"], opened=counts["OPENED"], clicked=counts["CLICKED"], replied=counts["REPLIED"])
+        EngagementTimeseriesPoint(
+            date=date, sent=counts["SENT"], opened=counts["OPENED"], clicked=counts["CLICKED"], replied=counts["REPLIED"]
+        )
         for date, counts in sorted(by_date.items())
     ]
 
@@ -473,14 +475,14 @@ async def get_top_projects(campaign_id: ObjectId, user_id: ObjectId) -> list[Pro
     matched = [
         ProjectEngagementDto(
             id=str(link.id),
-            name=project.name,
-            description=project.description,
+            name=matched_project.name,
+            description=matched_project.description,
             url=link.url,
             category=link.category,
             clickCount=link.clickCount,
         )
         for link in links
-        if (project := url_to_project.get(link.url.rstrip("/")))
+        if (matched_project := url_to_project.get(link.url.rstrip("/")))
     ]
     return sorted(matched, key=lambda p: p.clickCount, reverse=True)
 
@@ -513,7 +515,10 @@ async def get_insight_action_cards(campaign_id: ObjectId, user_id: ObjectId) -> 
             InsightActionCardDto(
                 icon="users",
                 title=f"{engaged_no_reply_count} recipient{plural} engaged but haven't replied",
-                body="They opened or clicked something in your email — a personalized follow-up referencing what they looked at is worth trying.",
+                body=(
+                    "They opened or clicked something in your email — a personalized "
+                    "follow-up referencing what they looked at is worth trying."
+                ),
             )
         )
     return cards
@@ -538,7 +543,10 @@ async def generate_follow_up_draft(settings: Settings, campaign_id: ObjectId, us
         context_parts.append(f"Their most-clicked link was the sender's {_CATEGORY_LABELS[links[0].category]} ({links[0].url}).")
 
     req = AiEmailGenerationRequest(
-        goal="Write a short, warm follow-up email to a recruiter/contact who engaged with a prior outreach email (opened or clicked a link) but hasn't replied yet.",
+        goal=(
+            "Write a short, warm follow-up email to a recruiter/contact who engaged with a prior "
+            "outreach email (opened or clicked a link) but hasn't replied yet."
+        ),
         target="A recruiter or hiring contact who showed interest but went quiet",
         tone="warm, concise, low-pressure — not pushy",
         context=" ".join(context_parts),

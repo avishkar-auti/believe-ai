@@ -170,7 +170,9 @@ async def campaign_engagement_timeseries_route(
 
 
 @router.get("/{campaign_id}/projects", response_model=list[ProjectEngagementDto])
-async def campaign_projects_route(campaign_id: PydanticObjectId, mongo_user_id: MongoUserIdDep, _user_id: UserIdDep) -> list[ProjectEngagementDto]:
+async def campaign_projects_route(
+    campaign_id: PydanticObjectId, mongo_user_id: MongoUserIdDep, _user_id: UserIdDep
+) -> list[ProjectEngagementDto]:
     return await campaign_service.get_top_projects(campaign_id, mongo_user_id)
 
 
